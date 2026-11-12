@@ -1,0 +1,43 @@
+# Secrets: only the examples are committed
+.env
+.env.*
+!.env.example
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
+
+# Node and Vite+
+node_modules/
+dist/
+dist-ssr/
+*.local
+*.tsbuildinfo
+coverage/
+
+# Rust
+target/
+
+# Foundry
+contracts/evm/out/
+contracts/evm/cache/
+contracts/evm/broadcast/*/31337/
+contracts/evm/broadcast/**/dry-run/
+
+# Cloudflare local state
+.wrangler/
+.mf/
+
+# Logs
+*.log
+logs/
+
+# Editors and OS
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.sw?
+
+# AI agent worktrees
+.claude/worktrees/
