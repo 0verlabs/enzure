@@ -1,0 +1,3 @@
+# Only the DAO can upgrade the oracle contract
+
+Chain Signatures signs for whichever code holds the oracle's NEAR account, so anyone able to deploy code there could sign a false result that every Receiver would accept. After the first deploy we delete the account's full-access keys, and new code can only be deployed through a Sputnik DAO proposal that calls the contract's own upgrade method. We rejected keeping a developer key (one leaked key could forge every Hook) and a contract that can never change (no way to fix bugs or rotate the design). The cost is that every fix after launch needs a DAO vote, and moving the oracle to a new account changes its derived EVM address, which means deploying a new Receiver on every chain.
