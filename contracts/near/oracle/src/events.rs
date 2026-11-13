@@ -2,6 +2,7 @@
 use near_sdk::json_types::U64;
 use near_sdk::{AccountId, Gas, NearToken, near};
 
+use crate::ai::Verdict;
 use crate::evm_hooks::SignedResult;
 
 /// An amount credited to an account's withdrawable balance.
@@ -46,6 +47,7 @@ pub enum Event {
         default_liveness: u64,
         max_hooks: u32,
         max_near_hook_gas: Gas,
+        appeal_window: u64,
     },
     /// The NEAR Consumer accepted `assertion_resolved`.
     #[event_version("1.0.0")]
@@ -75,5 +77,37 @@ pub enum Event {
         assertion_id: u64,
         hook_index: u32,
         reason: String,
+    },
+    #[event_version("1.0.0")]
+    AssertionDisputed {
+        assertion_id: u64,
+        disputer: AccountId,
+        evidence_hash: Option<String>,
+        bond: NearToken,
+        /// The seed the AI request uses.
+        seed: u32,
+    },
+    #[event_version("1.0.0")]
+    AiVerdictAccepted {
+        assertion_id: u64,
+        verdict: Verdict,
+        /// The account that submitted it.
+        resolver: AccountId,
+        request_hash: String,
+        response_hash: String,
+        public_key: String,
+        appeal_window_ends_at_ns: U64,
+    },
+    #[event_version("1.0.0")]
+    PromptTemplatePublished { version: u32, model_id: String },
+    #[event_version("1.0.0")]
+    RegisteredKeyAdded {
+        public_key: String,
+        model_id: String,
+    },
+    #[event_version("1.0.0")]
+    RegisteredKeyRemoved {
+        public_key: String,
+        model_id: String,
     },
 }

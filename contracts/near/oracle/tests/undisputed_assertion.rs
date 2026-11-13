@@ -482,6 +482,7 @@ async fn only_the_dao_changes_the_config() -> TestResult {
             "default_liveness": 7200,
             "max_hooks": 4,
             "max_near_hook_gas": near_api::NearGas::from_tgas(50),
+            "appeal_window": 86400,
         })
     );
 
@@ -492,6 +493,7 @@ async fn only_the_dao_changes_the_config() -> TestResult {
             "default_liveness": 300,
             "max_hooks": 4,
             "max_near_hook_gas": hook_gas,
+            "appeal_window": 120,
         }
     });
     let by_stranger = world
@@ -513,6 +515,7 @@ async fn only_the_dao_changes_the_config() -> TestResult {
             "default_liveness": 30,
             "max_hooks": 4,
             "max_near_hook_gas": hook_gas,
+            "appeal_window": 120,
         }
     });
     let rejected = world
@@ -532,6 +535,7 @@ async fn only_the_dao_changes_the_config() -> TestResult {
                 "default_liveness": 300,
                 "max_hooks": 4,
                 "max_near_hook_gas": hook_gas,
+                "appeal_window": 120,
             }),
         )]
     );
@@ -541,6 +545,7 @@ async fn only_the_dao_changes_the_config() -> TestResult {
         serde_json::json!(NearToken::from_near(5))
     );
     assert_eq!(config["default_liveness"], 300);
+    assert_eq!(config["appeal_window"], 120);
 
     // The new settings apply to the next Assertion.
     let small = world.post(&asserter, NearToken::from_near(4), None).await?;

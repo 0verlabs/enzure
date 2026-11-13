@@ -445,6 +445,7 @@ async fn the_dao_sets_the_hook_limits() -> TestResult {
                 "default_liveness": 7200,
                 "max_hooks": 1,
                 "max_near_hook_gas": NearGas::from_tgas(100),
+                "appeal_window": 86400,
             } }),
             ONE_YOCTO,
         )
@@ -458,6 +459,7 @@ async fn the_dao_sets_the_hook_limits() -> TestResult {
                 "default_liveness": 7200,
                 "max_hooks": 1,
                 "max_near_hook_gas": NearGas::from_tgas(100),
+                "appeal_window": 86400,
             }),
         )]
     );
