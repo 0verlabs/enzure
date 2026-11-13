@@ -7,10 +7,15 @@ use near_sdk::{
 };
 
 mod events;
+mod evm_hooks;
 mod hash;
 mod hooks;
 
 pub use events::{Event, Payout};
+pub use evm_hooks::{
+    DEFAULT_EVM_SIGNER, EVM_DERIVATION_PATH, EVM_SIGNER_DOMAIN_ID, EvmHook, EvmHookStatus,
+    EvmSignerView, RESULT_MESSAGE_VERSION, ResultMessage, SignedResult,
+};
 use hooks::StoredHook;
 pub use hooks::{Hook, HookView, NearHook, NearHookStatus};
 
@@ -121,14 +126,18 @@ pub struct Oracle {
     /// Id of the newest Assertion; ids start at 1, so 0 means none yet.
     last_assertion_id: u64,
     balances: LookupMap<AccountId, NearToken>,
+    /// The Chain Signatures signer that signs EVM Hooks.
+    evm_signer: AccountId,
 }
 
 #[near]
 impl Oracle {
     /// Initialises the oracle with the DAO that is its treasury and the only
-    /// account allowed to change the config.
+    /// account allowed to change the config. `evm_signer` is the Chain
+    /// Signatures signer for EVM Hooks, `v1.signer-prod.testnet` by default
+    /// (`v1.signer` on mainnet).
     #[init]
-    pub fn new(dao: AccountId) -> Self {
+    pub fn new(dao: AccountId, evm_signer: Option<AccountId>) -> Self {
         Self {
             dao,
             config: Config {
@@ -140,6 +149,8 @@ impl Oracle {
             assertions: LookupMap::new(StorageKey::Assertions),
             last_assertion_id: 0,
             balances: LookupMap::new(StorageKey::Balances),
+            evm_signer: evm_signer
+                .unwrap_or_else(|| DEFAULT_EVM_SIGNER.parse().expect("valid account id")),
         }
     }
 
@@ -148,7 +159,8 @@ impl Oracle {
     /// `claim_hash` and `evidence_hash` are sha256 hashes in hex of content kept
     /// off-chain. `liveness` is in seconds, from 1 minute to 7 days, and defaults
     /// to the config. `hooks` name the Consumers to tell once it settles, up to
-    /// the config's `max_hooks`. Attach `bond` plus
+    /// the config's `max_hooks`; their destinations can't change afterwards.
+    /// Attach `bond` plus
     /// `assertion_storage_deposit(hooks.len())`; anything above that is refunded.
     /// A rejected call returns the whole deposit.
     #[payable]

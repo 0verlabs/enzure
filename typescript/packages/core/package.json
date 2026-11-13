@@ -17,6 +17,10 @@
     "dev": "vp pack --watch",
     "check": "vp check"
   },
+  "dependencies": {
+    "@noble/curves": "catalog:",
+    "@noble/hashes": "catalog:"
+  },
   "devDependencies": {
     "@types/node": "catalog:",
     "typescript": "catalog:",

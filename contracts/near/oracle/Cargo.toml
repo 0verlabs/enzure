@@ -43,6 +43,8 @@ tokio = { workspace = true }
 testresult = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
+k256 = { workspace = true }
+sha3 = { workspace = true }
 
 [lints]
 workspace = true
