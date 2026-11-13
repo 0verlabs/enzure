@@ -214,8 +214,121 @@ test("an appealed Assertion's timeline shows the Appeal Window closed and no set
     "disputed",
     "ai_verdict",
     "appeal_window",
+    "appeal",
+    "dao_deadline",
   ]);
-  expect(steps.at(-1)).toEqual({ kind: "appeal_window", endsAtNs: "1100000000000", open: false });
+  expect(steps).toContainEqual({
+    kind: "appeal_window",
+    endsAtNs: "1100000000000",
+    open: false,
+    appealedAtNs: "1050000000000",
+  });
+  expect(steps.at(-2)).toEqual({
+    kind: "appeal",
+    atNs: "1050000000000",
+    event: "appeal_started",
+    appeal: appealed.appeal,
+  });
+  expect(steps.at(-1)).toEqual({ kind: "dao_deadline", endsAtNs: "605850000000000", open: true });
+  expect(assertionTimeline(appealed, 605_850_000_000_000n).at(-1)).toEqual({
+    kind: "dao_deadline",
+    endsAtNs: "605850000000000",
+    open: false,
+  });
+});
+
+const verdict = (value: string, acceptedAtNs: string) => ({
+  verdict: value,
+  request_hash: "cc".repeat(32),
+  response_hash: "dd".repeat(32),
+  public_key: "ee".repeat(32),
+  accepted_at_ns: acceptedAtNs,
+});
+
+const disputed: OracleAssertion = {
+  ...posted,
+  state: "disputed",
+  dispute: {
+    disputer: "bob.testnet",
+    evidence_hash: null,
+    seed: 7,
+    disputed_at_ns: "1010000000000",
+    ai_verdict_deadline_ns: "1070000000000",
+  },
+};
+
+test("Conflicting Verdicts send the Assertion to Appeal with both verdicts on the Appeal step", () => {
+  const conflicting: OracleAssertion = {
+    ...disputed,
+    state: "in_appeal",
+    ai_verdicts: [verdict("TRUE", "1020000000000"), verdict("FALSE", "1030000000000")],
+    appeal_window_ends_at_ns: "1080000000000",
+    appeal: {
+      reason: "conflicting",
+      appellant: null,
+      appeal_bond: null,
+      started_at_ns: "1030000000000",
+      dao_deadline_ns: "1630000000000",
+    },
+  };
+
+  const steps = assertionTimeline(conflicting, 1_040_000_000_000n);
+
+  expect(steps.map((step) => step.kind)).toEqual([
+    "posted",
+    "liveness",
+    "disputed",
+    "ai_verdict",
+    "ai_verdict",
+    "appeal_window",
+    "appeal",
+    "dao_deadline",
+  ]);
+  expect(steps.find((step) => step.kind === "appeal")).toMatchObject({
+    conflictingVerdicts: ["TRUE", "FALSE"],
+  });
+});
+
+test("a DAO ruling before its deadline is shown, then the settlement", () => {
+  const ruled: OracleAssertion = {
+    ...disputed,
+    state: "settled",
+    outcome: true,
+    settled_at_ns: "1200000000000",
+    appeal: {
+      reason: "no_verdict",
+      appellant: null,
+      appeal_bond: null,
+      started_at_ns: "1080000000000",
+      dao_deadline_ns: "1680000000000",
+    },
+  };
+
+  expect(assertionTimeline(ruled, 1_300_000_000_000n).slice(3)).toEqual([
+    { kind: "appeal", atNs: "1080000000000", event: "appeal_started", appeal: ruled.appeal },
+    { kind: "dao_ruling", atNs: "1200000000000", event: "appeal_resolved", outcome: true },
+    { kind: "settled", atNs: "1200000000000", event: "assertion_settled", outcome: true },
+  ]);
+});
+
+test("an Appeal the DAO left past its deadline shows the deadline passed, then the settlement", () => {
+  const overdue: OracleAssertion = {
+    ...disputed,
+    state: "settled",
+    outcome: false,
+    settled_at_ns: "1700000000000",
+    appeal: {
+      reason: "unresolvable",
+      appellant: null,
+      appeal_bond: null,
+      started_at_ns: "1080000000000",
+      dao_deadline_ns: "1680000000000",
+    },
+  };
+
+  expect(assertionTimeline(overdue, 1_800_000_000_000n).slice(4).map((step) => step.kind)).toEqual(
+    ["dao_deadline", "settled"],
+  );
 });
 
 test("an Assertion's events are read from the explorer: its transaction list, then the transactions", async () => {

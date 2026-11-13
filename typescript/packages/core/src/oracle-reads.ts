@@ -126,17 +126,29 @@ export type TimelineStep =
       index: number;
       verdict: AiVerdictView;
     }
-  | { kind: "appeal_window"; endsAtNs: string; open: boolean }
+  | { kind: "appeal_window"; endsAtNs: string; open: boolean; appealedAtNs?: string }
+  | {
+      kind: "appeal";
+      atNs: string;
+      event: "appeal_started";
+      appeal: AppealView;
+      /** The first and second AI Verdict, when they conflicted. */
+      conflictingVerdicts?: [string, string];
+    }
+  /** The DAO's deadline to rule, shown while it runs and when it passed without a ruling. */
+  | { kind: "dao_deadline"; endsAtNs: string; open: boolean }
+  | { kind: "dao_ruling"; atNs: string; event: "appeal_resolved"; outcome: boolean }
   | { kind: "settled"; atNs: string; event: "assertion_settled"; outcome: boolean };
 
 /**
  * The steps an Assertion has gone through, oldest first, as of `nowNs`:
- * posting, Liveness, dispute, each AI Verdict, the Appeal Window and
- * settlement. Steps that haven't happened are left out; open timers are
- * marked `open`.
+ * posting, Liveness, dispute, each AI Verdict, the Appeal Window, the move to
+ * Appeal with the DAO's deadline or ruling, and settlement. Steps that haven't
+ * happened are left out; open timers are marked `open`.
  */
 export function assertionTimeline(assertion: OracleAssertion, nowNs: bigint): TimelineStep[] {
   const settled = assertion.state === "settled";
+  const appeal = assertion.appeal ?? null;
   const steps: TimelineStep[] = [
     { kind: "posted", atNs: assertion.asserted_at_ns, event: "assertion_posted" },
   ];
@@ -170,7 +182,39 @@ export function assertionTimeline(assertion: OracleAssertion, nowNs: bigint): Ti
       endsAtNs: assertion.appeal_window_ends_at_ns,
       // Only a ruled Assertion can still be appealed; an Appeal or settlement closes the window.
       open: assertion.state === "ruled" && nowNs < BigInt(assertion.appeal_window_ends_at_ns),
+      ...(appeal ? { appealedAtNs: appeal.started_at_ns } : {}),
     });
+  }
+  if (appeal) {
+    const [first, second] = assertion.ai_verdicts ?? [];
+    steps.push({
+      kind: "appeal",
+      atNs: appeal.started_at_ns,
+      event: "appeal_started",
+      appeal,
+      ...(appeal.reason === "conflicting" && first && second
+        ? { conflictingVerdicts: [first.verdict, second.verdict] as [string, string] }
+        : {}),
+    });
+    // The DAO can only rule before its deadline and `settle` only works from it on.
+    const ruled =
+      settled &&
+      assertion.settled_at_ns !== null &&
+      BigInt(assertion.settled_at_ns) < BigInt(appeal.dao_deadline_ns);
+    if (ruled && assertion.outcome !== null) {
+      steps.push({
+        kind: "dao_ruling",
+        atNs: assertion.settled_at_ns!,
+        event: "appeal_resolved",
+        outcome: assertion.outcome,
+      });
+    } else {
+      steps.push({
+        kind: "dao_deadline",
+        endsAtNs: appeal.dao_deadline_ns,
+        open: !settled && nowNs < BigInt(appeal.dao_deadline_ns),
+      });
+    }
   }
   if (settled && assertion.settled_at_ns && assertion.outcome !== null) {
     steps.push({
@@ -181,6 +225,35 @@ export function assertionTimeline(assertion: OracleAssertion, nowNs: bigint): Ti
     });
   }
   return steps;
+}
+
+/**
+ * The party that lost the first AI Verdict and so may Appeal it: the Disputer
+ * after TRUE, the Asserter after FALSE. Null without a TRUE or FALSE verdict.
+ */
+export function losingParty(assertion: OracleAssertion): string | null {
+  const first = assertion.ai_verdicts?.[0]?.verdict;
+  if (first === "TRUE") return assertion.dispute?.disputer ?? null;
+  if (first === "FALSE") return assertion.asserter;
+  return null;
+}
+
+/**
+ * Whether `accountId` can call `appeal` at `nowNs`: it lost the AI Verdict of
+ * a ruled Assertion whose Appeal Window is still open.
+ */
+export function canAppeal(
+  assertion: OracleAssertion,
+  accountId: string | null,
+  nowNs: bigint,
+): boolean {
+  return (
+    accountId !== null &&
+    assertion.state === "ruled" &&
+    assertion.appeal_window_ends_at_ns !== null &&
+    nowNs < BigInt(assertion.appeal_window_ends_at_ns) &&
+    losingParty(assertion) === accountId
+  );
 }
 
 /** A transaction as the FastNEAR transactions API returns it; only the fields read here. */

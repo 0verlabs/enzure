@@ -39,7 +39,9 @@ export {
 export {
   assertionEvents,
   assertionTimeline,
+  canAppeal,
   fetchAssertionEvents,
+  losingParty,
   nearRpcView,
   timelineTransactions,
   type AiVerdictView,
