@@ -131,17 +131,10 @@ function AssertionPage() {
         }
       />
 
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-        <div className="flex min-w-0 flex-col gap-6">
-          <Card>
-            <CardContent>
-              <StageTrack stages={stagesOf(assertion, now)} />
-            </CardContent>
-          </Card>
-          <ContentCard assertion={assertion} />
-          <Timeline assertion={assertion} onChanged={refresh} />
-        </div>
-        <aside className="flex flex-col gap-6 lg:sticky lg:top-20">
+      {/* One column below lg: status and actions first, since they are time-limited, then the
+          content, then the details. From lg the content takes the left column across both rows. */}
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem] lg:grid-rows-[auto_1fr]">
+        <div className="flex flex-col gap-6 lg:col-start-2 lg:row-start-1">
           <StatusPanel assertion={assertion} />
           {assertion.state === "in_appeal" && assertion.appeal ? (
             <Card>
@@ -158,8 +151,19 @@ function AssertionPage() {
           ) : null}
           {canDispute ? <DisputeCard assertion={assertion} onDisputed={refresh} /> : null}
           {appealable ? <AppealCard assertion={assertion} onAppealed={refresh} /> : null}
+        </div>
+        <div className="flex min-w-0 flex-col gap-6 lg:col-start-1 lg:row-span-2 lg:row-start-1">
+          <Card>
+            <CardContent>
+              <StageTrack stages={stagesOf(assertion, now)} />
+            </CardContent>
+          </Card>
+          <ContentCard assertion={assertion} />
+          <Timeline assertion={assertion} onChanged={refresh} />
+        </div>
+        <div className="lg:col-start-2 lg:row-start-2">
           <FactsCard assertion={assertion} />
-        </aside>
+        </div>
       </div>
     </>
   );
@@ -223,7 +227,7 @@ function StatusPanel({ assertion }: { assertion: OracleAssertion }) {
               }
             : null;
 
-  if (!window) {
+  if (!window || (mounted && now >= BigInt(window.end))) {
     return (
       <Card>
         <CardContent className="flex flex-col gap-1.5">

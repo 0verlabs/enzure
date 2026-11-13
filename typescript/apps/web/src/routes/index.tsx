@@ -31,7 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 import { missingConfig } from "@/config";
 import { formatNear, oracle, PAGE_SIZE, shortHash } from "@/lib/oracle";
 
@@ -60,18 +60,15 @@ type Filter = "all" | "open" | "resolving" | "settled";
 
 const FILTERS: { value: Filter; label: string }[] = [
   { value: "all", label: "All" },
-  { value: "open", label: "In Liveness" },
+  { value: "open", label: "Undisputed" },
   { value: "resolving", label: "Disputed" },
   { value: "settled", label: "Settled" },
 ];
 
-/** Which filter an Assertion falls under: open while it can be disputed, resolving from the dispute to settlement. */
-function filterOf(assertion: OracleAssertion, now: bigint): Exclude<Filter, "all"> | null {
+/** Which filter an Assertion falls under: undisputed and unsettled, disputed and unsettled, or settled. */
+function filterOf(assertion: OracleAssertion): Exclude<Filter, "all"> {
   if (assertion.state === "settled") return "settled";
-  if (assertion.state === "asserted") {
-    return now < BigInt(assertion.liveness_ends_at_ns) ? "open" : null;
-  }
-  return "resolving";
+  return assertion.state === "asserted" ? "open" : "resolving";
 }
 
 function Home() {
@@ -81,15 +78,15 @@ function Home() {
   const mounted = useMounted();
   const [filter, setFilter] = useState<Filter>("all");
 
-  const counts = { open: 0, resolving: 0, settled: 0 };
-  for (const assertion of assertions) {
-    const kind = filterOf(assertion, now);
-    if (kind) counts[kind] += 1;
-  }
+  // Only Liveness still running counts as open to dispute; time-based, so counted after hydration.
+  const disputable = assertions.filter(
+    (assertion) => assertion.state === "asserted" && now < BigInt(assertion.liveness_ends_at_ns),
+  ).length;
+  const resolving = assertions.filter((assertion) => filterOf(assertion) === "resolving").length;
   const shown =
-    filter === "all" || !mounted
+    filter === "all"
       ? assertions
-      : assertions.filter((assertion) => filterOf(assertion, now) === filter);
+      : assertions.filter((assertion) => filterOf(assertion) === filter);
   const last = assertions.at(-1);
   const older = last && assertions.length === PAGE_SIZE && last.id > 1 ? last.id : null;
   const range = assertions.length > 0 ? `${assertions[0]!.id}–${assertions.at(-1)!.id}` : null;
@@ -111,14 +108,10 @@ function Home() {
         <Stat label="Posted" value={latest ? String(latest.id) : "0"} note="Assertions in total" />
         <Stat
           label="In Liveness"
-          value={mounted ? String(counts.open) : "–"}
+          value={mounted ? String(disputable) : "–"}
           note={`Open to dispute, of these ${assertions.length}`}
         />
-        <Stat
-          label="Disputed"
-          value={mounted ? String(counts.resolving) : "–"}
-          note="AI Verdict or Appeal pending"
-        />
+        <Stat label="Disputed" value={String(resolving)} note="AI Verdict or Appeal pending" />
         <Stat
           label="Minimum bond"
           value={minBond ? formatNear(minBond, 2) : "–"}
@@ -134,15 +127,19 @@ function Home() {
               {range ? `Assertions ${range}` : "Nothing posted yet"}
             </CardDescription>
           </div>
-          <Tabs value={filter} onValueChange={(value) => setFilter(value as Filter)}>
-            <TabsList>
-              {FILTERS.map((option) => (
-                <TabsTrigger key={option.value} value={option.value}>
-                  {option.label}
-                </TabsTrigger>
-              ))}
-            </TabsList>
-          </Tabs>
+          <ToggleGroup
+            aria-label="Filter by state"
+            variant="outline"
+            spacing={0}
+            value={[filter]}
+            onValueChange={(value) => value[0] && setFilter(value[0] as Filter)}
+          >
+            {FILTERS.map((option) => (
+              <ToggleGroupItem key={option.value} value={option.value}>
+                {option.label}
+              </ToggleGroupItem>
+            ))}
+          </ToggleGroup>
         </CardHeader>
         <CardContent className="px-0">
           {shown.length === 0 ? (

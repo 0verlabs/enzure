@@ -25,6 +25,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarSeparator,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Spinner } from "@/components/ui/spinner";
@@ -39,6 +40,9 @@ const DOCS_URL: string | null = null;
 
 export function AppSidebar() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const { setOpenMobile } = useSidebar();
+  // On a phone the sidebar is a sheet over the page: close it once a link has moved the page.
+  useEffect(() => setOpenMobile(false), [pathname, setOpenMobile]);
   const onList = pathname === "/" || pathname.startsWith("/assertions/");
 
   return (
@@ -111,6 +115,8 @@ export function AppSidebar() {
 /** The connected account's withdrawable balance in the oracle, with a Withdraw button. */
 function BalancePanel() {
   const wallet = useWallet();
+  // The panel stays mounted across pages, so it re-reads the balance on each page change.
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
   const [balance, setBalance] = useState<string | null>(null);
   const [loadError, setLoadError] = useState<unknown>(null);
 
@@ -123,7 +129,7 @@ function BalancePanel() {
 
   useEffect(() => {
     refresh().catch(setLoadError);
-  }, [refresh]);
+  }, [refresh, pathname]);
 
   if (wallet.loading) return <Skeleton className="h-24 w-full" />;
 

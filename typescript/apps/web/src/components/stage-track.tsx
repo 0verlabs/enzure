@@ -44,7 +44,7 @@ export function stagesOf(assertion: OracleAssertion, now: bigint): Stage[] {
           : "current"
         : windowOpen
           ? "current"
-          : pass(false, false, settled || noDispute),
+          : pass(false, false, settled || noDispute || (verdicts > 0 && !windowOpen)),
     },
     { label: "Settled", state: settled ? "done" : "ahead" },
   ];

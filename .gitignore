@@ -50,3 +50,6 @@ logs/
 
 # AI agent worktrees
 .claude/worktrees/
+
+# The design skill's deal history and gate state
+.taste-skill/
