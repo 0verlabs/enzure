@@ -59,3 +59,12 @@ export {
   type SignedResultCheck,
   type SignedResultView,
 } from "./relayer.ts";
+export {
+  SCHEDULER_GAS,
+  dueCalls,
+  type AiVerdictView,
+  type DisputeView,
+  type DueCall,
+  type DueCallOptions,
+  type OracleAssertion,
+} from "./scheduler.ts";
