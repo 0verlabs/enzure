@@ -1,0 +1,30 @@
+[package]
+name = "near-consumer"
+description = "Example NEAR Consumer: records the outcomes the Enzure oracle delivers through NEAR Hooks"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT"
+repository = "https://github.com/0verlabs/enzure"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+near-sdk = "5.30.1"
+
+# A standalone workspace, so the example builds on its own outside contracts/near.
+[workspace]
+
+[profile.release]
+codegen-units = 1
+opt-level = "z"
+lto = true
+debug = false
+panic = "abort"
+overflow-checks = true
+
+[lints.rust.unexpected_cfgs]
+level = "warn"
+check-cfg = ['cfg(near)']

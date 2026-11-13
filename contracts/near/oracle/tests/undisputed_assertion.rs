@@ -480,11 +480,19 @@ async fn only_the_dao_changes_the_config() -> TestResult {
             "dao": world.dao,
             "min_bond": NearToken::from_near(1),
             "default_liveness": 7200,
+            "max_hooks": 4,
+            "max_near_hook_gas": near_api::NearGas::from_tgas(50),
         })
     );
 
+    let hook_gas = near_api::NearGas::from_tgas(50);
     let new_config = serde_json::json!({
-        "config": { "min_bond": NearToken::from_near(5), "default_liveness": 300 }
+        "config": {
+            "min_bond": NearToken::from_near(5),
+            "default_liveness": 300,
+            "max_hooks": 4,
+            "max_near_hook_gas": hook_gas,
+        }
     });
     let by_stranger = world
         .call(&asserter, "set_config", new_config.clone(), ONE_YOCTO)
@@ -500,7 +508,12 @@ async fn only_the_dao_changes_the_config() -> TestResult {
         .await?;
     assert!(failure_message(without_yocto).contains("exactly 1 yoctoNEAR"));
     let bad_liveness = serde_json::json!({
-        "config": { "min_bond": NearToken::from_near(5), "default_liveness": 30 }
+        "config": {
+            "min_bond": NearToken::from_near(5),
+            "default_liveness": 30,
+            "max_hooks": 4,
+            "max_near_hook_gas": hook_gas,
+        }
     });
     let rejected = world
         .call(&world.dao, "set_config", bad_liveness, ONE_YOCTO)
@@ -514,7 +527,12 @@ async fn only_the_dao_changes_the_config() -> TestResult {
         enzure_events(&changed),
         [(
             "config_changed".to_string(),
-            serde_json::json!({ "min_bond": NearToken::from_near(5), "default_liveness": 300 }),
+            serde_json::json!({
+                "min_bond": NearToken::from_near(5),
+                "default_liveness": 300,
+                "max_hooks": 4,
+                "max_near_hook_gas": hook_gas,
+            }),
         )]
     );
     let config: serde_json::Value = world.view("get_config", serde_json::json!({})).await?;

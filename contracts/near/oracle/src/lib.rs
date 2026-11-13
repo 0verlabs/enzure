@@ -8,8 +8,11 @@ use near_sdk::{
 
 mod events;
 mod hash;
+mod hooks;
 
 pub use events::{Event, Payout};
+use hooks::StoredHook;
+pub use hooks::{Hook, HookView, NearHook, NearHookStatus};
 
 const NS_PER_SEC: u64 = 1_000_000_000;
 /// Shortest Liveness an Asserter can choose, in seconds.
@@ -42,6 +45,10 @@ pub struct Config {
     pub min_bond: NearToken,
     /// Liveness, in seconds, for Assertions posted without one.
     pub default_liveness: u64,
+    /// The most Hooks, NEAR and EVM together, one Assertion can have.
+    pub max_hooks: u32,
+    /// The most gas an Asserter can fix for one NEAR Hook.
+    pub max_near_hook_gas: Gas,
 }
 
 /// The config as the `get_config` view returns it.
@@ -51,12 +58,9 @@ pub struct ConfigView {
     pub dao: AccountId,
     pub min_bond: NearToken,
     pub default_liveness: u64,
+    pub max_hooks: u32,
+    pub max_near_hook_gas: Gas,
 }
-
-/// A Hook delivers a settled Assertion's outcome to a Consumer. Hooks arrive in a
-/// later version; until then `assert_claim` only accepts an empty list.
-#[near(serializers = [json])]
-pub enum Hook {}
 
 #[near(serializers = [borsh])]
 enum AssertionState {
@@ -73,6 +77,8 @@ struct Assertion {
     asserted_at_ns: u64,
     liveness_ends_at_ns: u64,
     state: AssertionState,
+    /// Fixed when posting; only their delivery state changes.
+    hooks: Vec<StoredHook>,
 }
 
 /// Where an Assertion is in its lifecycle.
@@ -103,6 +109,7 @@ pub struct AssertionView {
     pub settled_at_ns: Option<U64>,
     /// The settled outcome; null until the Assertion settles.
     pub outcome: Option<bool>,
+    pub hooks: Vec<HookView>,
 }
 
 #[near(contract_state)]
@@ -127,6 +134,8 @@ impl Oracle {
             config: Config {
                 min_bond: DEFAULT_MIN_BOND,
                 default_liveness: DEFAULT_LIVENESS_SECS,
+                max_hooks: hooks::DEFAULT_MAX_HOOKS,
+                max_near_hook_gas: hooks::DEFAULT_MAX_NEAR_HOOK_GAS,
             },
             assertions: LookupMap::new(StorageKey::Assertions),
             last_assertion_id: 0,
@@ -138,8 +147,10 @@ impl Oracle {
     ///
     /// `claim_hash` and `evidence_hash` are sha256 hashes in hex of content kept
     /// off-chain. `liveness` is in seconds, from 1 minute to 7 days, and defaults
-    /// to the config. Attach `bond` plus `assertion_storage_deposit()`; anything
-    /// above that is refunded. A rejected call returns the whole deposit.
+    /// to the config. `hooks` name the Consumers to tell once it settles, up to
+    /// the config's `max_hooks`. Attach `bond` plus
+    /// `assertion_storage_deposit(hooks.len())`; anything above that is refunded.
+    /// A rejected call returns the whole deposit.
     #[payable]
     pub fn assert_claim(
         &mut self,
@@ -151,7 +162,7 @@ impl Oracle {
     ) -> u64 {
         let claim_hash = hash::parse("claim_hash", &claim_hash);
         let evidence_hash = evidence_hash.map(|hex| hash::parse("evidence_hash", &hex));
-        require!(hooks.is_empty(), "Hooks are not supported yet");
+        hooks::validate(&hooks, &self.config);
         require!(
             bond >= self.config.min_bond,
             format!(
@@ -161,7 +172,7 @@ impl Oracle {
         );
         let liveness = liveness.unwrap_or(self.config.default_liveness);
         require_liveness_in_range("Liveness", liveness);
-        let required = bond.saturating_add(Self::storage_deposit());
+        let required = bond.saturating_add(Self::storage_deposit(hooks.len() as u32));
         let attached = env::attached_deposit();
         require!(
             attached >= required,
@@ -183,6 +194,7 @@ impl Oracle {
             asserted_at_ns: now,
             liveness_ends_at_ns: now + liveness * NS_PER_SEC,
             state: AssertionState::Asserted,
+            hooks: hooks.into_iter().map(StoredHook::new).collect(),
         };
         Event::AssertionPosted {
             assertion_id: id,
@@ -204,7 +216,8 @@ impl Oracle {
 
     /// Settles an Assertion whose Liveness has ended without a dispute: it is
     /// TRUE and the whole bond is credited to the Asserter's balance. Anyone can
-    /// call it. Returns the outcome.
+    /// call it, attaching enough gas to deliver every NEAR Hook with its fixed gas.
+    /// NEAR Hooks are called after the balances are credited. Returns the outcome.
     pub fn settle(&mut self, assertion_id: u64) -> bool {
         let now = env::block_timestamp();
         let assertion = self
@@ -221,6 +234,7 @@ impl Oracle {
             now >= assertion.liveness_ends_at_ns,
             "Liveness has not ended"
         );
+        hooks::require_gas_to_deliver(&assertion.hooks);
 
         let outcome = true;
         assertion.state = AssertionState::Settled {
@@ -231,6 +245,9 @@ impl Oracle {
             account_id: assertion.asserter.clone(),
             amount: assertion.bond,
         };
+        // The Consumer calls run in later receipts, after this one has committed
+        // the settlement and the credit below.
+        hooks::deliver_all(assertion_id, outcome, &mut assertion.hooks);
         self.credit(&payout.account_id, payout.amount);
         Event::AssertionSettled {
             assertion_id,
@@ -290,14 +307,17 @@ impl Oracle {
         Event::ConfigChanged {
             min_bond: config.min_bond,
             default_liveness: config.default_liveness,
+            max_hooks: config.max_hooks,
+            max_near_hook_gas: config.max_near_hook_gas,
         }
         .emit();
         self.config = config;
     }
 
-    /// The deposit, on top of the bond, that `assert_claim` needs for storage.
-    pub fn assertion_storage_deposit(&self) -> NearToken {
-        Self::storage_deposit()
+    /// The deposit, on top of the bond, that `assert_claim` needs for storage of
+    /// an Assertion with `hooks` Hooks (default 0).
+    pub fn assertion_storage_deposit(&self, hooks: Option<u32>) -> NearToken {
+        Self::storage_deposit(hooks.unwrap_or(0))
     }
 
     /// An Assertion with its state and timers. Panics if there is none with this id.
@@ -344,13 +364,16 @@ impl Oracle {
             dao: self.dao.clone(),
             min_bond: self.config.min_bond,
             default_liveness: self.config.default_liveness,
+            max_hooks: self.config.max_hooks,
+            max_near_hook_gas: self.config.max_near_hook_gas,
         }
     }
 }
 
 impl Oracle {
-    fn storage_deposit() -> NearToken {
-        env::storage_byte_cost().saturating_mul(ASSERTION_STORAGE_BYTES.into())
+    fn storage_deposit(hooks: u32) -> NearToken {
+        let bytes = ASSERTION_STORAGE_BYTES.saturating_add(hooks::storage_bytes(hooks));
+        env::storage_byte_cost().saturating_mul(bytes.into())
     }
 
     fn credit(&mut self, account_id: &AccountId, amount: NearToken) {
@@ -394,6 +417,7 @@ impl Assertion {
             liveness_ends_at_ns: U64(self.liveness_ends_at_ns),
             settled_at_ns,
             outcome,
+            hooks: self.hooks.iter().map(StoredHook::view).collect(),
         }
     }
 }
