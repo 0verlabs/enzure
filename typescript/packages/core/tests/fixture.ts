@@ -64,3 +64,35 @@ export function inputFromFixture(): AiRequestInput {
     seed: input.seed,
   };
 }
+
+/** The real Chain Signatures signing of an EVM Hook from NEAR testnet in the root fixtures folder. */
+export const chainSignatures = JSON.parse(
+  readFileSync(
+    join(import.meta.dirname, "../../../../fixtures/chain-signatures/signed-result.json"),
+    "utf8",
+  ),
+) as {
+  oracle: string;
+  signer: string;
+  path: string;
+  domain_id: number;
+  public_key: string;
+  address: string;
+  signed_result: {
+    version: string;
+    chain_id: number;
+    receiver: string;
+    consumer: string;
+    assertion_id: number;
+    outcome: boolean;
+    claim_hash: string;
+    asserter: string;
+    asserter_hash: string;
+    settled_at: string;
+    message: string;
+    digest: string;
+    r: string;
+    s: string;
+    v: number;
+  };
+};

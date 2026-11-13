@@ -27,3 +27,12 @@ export {
   MAX_CONTENT_BYTES,
   type ContentCheck,
 } from "./content.ts";
+export {
+  RESULT_MESSAGE_VERSION,
+  encodeResultMessage,
+  evmAddressFromPublicKey,
+  recoverEvmSigner,
+  resultMessageDigest,
+  type EvmSignature,
+  type ResultMessage,
+} from "./result-message.ts";
