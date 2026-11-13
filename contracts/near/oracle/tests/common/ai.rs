@@ -215,6 +215,19 @@ impl World {
         self.view("ai_request", content.args(id)).await
     }
 
+    /// The panic message of an `ai_request` view call that is expected to fail.
+    pub async fn ai_request_error(&self, id: u64, content: &Content) -> String {
+        let result = near_api::Contract(self.oracle.clone())
+            .call_function("ai_request", content.args(id))
+            .read_only::<String>()
+            .fetch_from(&self.network)
+            .await;
+        match result {
+            Ok(request) => panic!("expected ai_request to fail, got {}", request.data),
+            Err(error) => error.to_string(),
+        }
+    }
+
     /// Calls `submit_ai_verdict` as `resolver`.
     pub async fn submit_verdict(
         &self,
