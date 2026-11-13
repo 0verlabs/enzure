@@ -258,10 +258,15 @@ export type ResolverPassResult =
   | { assertionId: number; status: "skipped"; reason: string }
   | { assertionId: number; status: "failed"; error: string };
 
-/** What a Resolver remembers about one Assertion: how often it was tried, and whether it is done. */
+/**
+ * What a Resolver remembers about one Assertion: how often it was tried, and
+ * whether it is done. `gaveUp` marks an Assertion that is done only because
+ * every try failed, so a durable memory can let it be tried again later.
+ */
 export interface ResolverAttempt {
   tries: number;
   done: boolean;
+  gaveUp?: boolean;
 }
 
 /** Where a Resolver keeps its attempts, by Assertion id. A `Map` works; so does durable storage. */
@@ -274,9 +279,10 @@ export interface ResolverMemory {
  * A Resolver that remembers what it has done, so each disputed Assertion is
  * handled once: after a submitted or skipped AI Verdict it is never tried
  * again, and after failures it is retried on later passes up to
- * `maxAttempts` times (default 3). By default memory lasts as long as the
- * process, and on a restart Assertions the oracle still shows as disputed are
- * tried again; pass a durable `memory` to keep it across restarts.
+ * `maxAttempts` times (default 3), then given up on. By default memory lasts
+ * as long as the process, and on a restart Assertions the oracle still shows
+ * as disputed are tried again. A durable `memory` keeps it across restarts;
+ * it may forget a given-up Assertion to have it tried again.
  */
 export function createResolver(
   options: ResolverOptions & { call: OracleCall },
@@ -297,8 +303,10 @@ export function createResolver(
         // Recorded before the attempt, so an attempt cut off midway still counts.
         memory.set(assertion.id, { tries, done: false });
         const result = await resolve(options, assertion);
-        if (result.status !== "failed" || tries >= maxAttempts) {
+        if (result.status !== "failed") {
           memory.set(assertion.id, { tries, done: true });
+        } else if (tries >= maxAttempts) {
+          memory.set(assertion.id, { tries, done: true, gaveUp: true });
         }
         results.push(result);
       }

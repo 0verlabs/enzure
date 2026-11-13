@@ -6,7 +6,7 @@ declare const process: { env: Record<string, string | undefined> };
 
 // Plain settings come from the environment when the config is evaluated
 // (scripts/deploy-keeper.sh loads them from the root .env); unset ones are
-// left out and the Keeper's defaults apply. Keys and the RPC URLs, which can
+// left out and the Keeper's defaults apply. Keys and RPC URLs, which can
 // carry provider API keys, are secrets, uploaded by the deploy script.
 const setting = (name: string) => {
   const value = process.env[name];
@@ -50,12 +50,13 @@ export default defineConfig({
       ORACLE_ACCOUNT_ID: setting("ORACLE_ACCOUNT_ID"),
       NEAR_ACCOUNT_ID: setting("NEAR_ACCOUNT_ID"),
       NEAR_NETWORK: setting("NEAR_NETWORK"),
-      NEAR_RPC_URL: setting("NEAR_RPC_URL"),
       NEAR_AI_URL: setting("NEAR_AI_URL"),
       STORAGE_URL: setting("STORAGE_URL"),
       POLL_INTERVAL_MS: setting("POLL_INTERVAL_MS"),
       NEAR_PRIVATE_KEY: bindings.secret(),
       NEARAI_API_KEY: bindings.secret(),
+      // Optional, so declared only when set at deploy time; a secret like the other RPC URLs.
+      NEAR_RPC_URL: process.env.NEAR_RPC_URL ? bindings.secret() : undefined,
       ...relayerSecrets,
     },
   },

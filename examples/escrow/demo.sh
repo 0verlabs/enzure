@@ -105,6 +105,11 @@ buyer_evm="$(node -e '
   console.log(r("viem/accounts").privateKeyToAccount(process.env.EVM_PRIVATE_KEY).address);' \
   "$root/typescript/packages/core/package.json")"
 echo "Oracle $ORACLE_ACCOUNT_ID; EVM chain $chain_id at $EVM_RPC_URL; buyer $NEAR_ACCOUNT_ID / $buyer_evm" >&2
+# The Keeper relays this chain as Base, and refuses an RPC for any other chain.
+if [ -z "${NO_KEEPER:-}" ] && [ "$chain_id" != 84532 ] && [ "$chain_id" != 8453 ]; then
+  echo "error: EVM_RPC_URL serves chain $chain_id; the Keeper relays only Base (8453) or Base Sepolia (84532). Use anvil --chain-id 84532 locally" >&2
+  exit 1
+fi
 
 if [ -z "${RECEIVER_ADDRESS:-}" ]; then
   step "Deploying the Receiver for $ORACLE_ACCOUNT_ID"

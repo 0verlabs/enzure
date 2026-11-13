@@ -6,31 +6,41 @@
 # Reads from the environment, or the repository's .env for anything unset:
 #   CLOUDFLARE_API_TOKEN, CLOUDFLARE_ACCOUNT_ID   as for scripts/deploy-storage.sh
 #   ORACLE_ACCOUNT_ID, NEAR_ACCOUNT_ID, STORAGE_URL                 required settings
-#   NEAR_NETWORK, NEAR_RPC_URL, NEAR_AI_URL, POLL_INTERVAL_MS       optional settings
+#   NEAR_NETWORK, NEAR_AI_URL, POLL_INTERVAL_MS                     optional settings
 #   NEAR_PRIVATE_KEY, NEARAI_API_KEY                                required secrets
+#   NEAR_RPC_URL                                                    optional secret
 #   <CHAIN>_RPC_URL and <CHAIN>_RELAYER_KEY, e.g. BASE_RPC_URL and BASE_RELAYER_KEY:
 #                                  optional secrets, a pair per Relayer chain
 #
 # Secrets go to cf in a temporary file readable only by this user, deleted on
 # exit; they never appear on a command line. Extra arguments go to `cf deploy`
 # (for example --dry-run).
+#
+# A deploy doesn't delete secrets uploaded before. To turn a Relayer chain
+# off, delete its pair: npx wrangler secret delete BASE_RELAYER_KEY --name enzure-keeper
+# (and BASE_RPC_URL).
 set -euo pipefail
 
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-# Sets $1 from the root .env when it isn't already set.
+# Sets $1 from the root .env when it isn't already set. Like node --env-file,
+# it drops a carriage return and one pair of surrounding quotes.
 load() {
   local name="$1" value
   if [ -z "${!name:-}" ] && [ -f "$root/.env" ]; then
-    value="$(sed -n "s/^${name}=//p" "$root/.env" | tail -n 1)"
+    value="$(sed -n "s/^${name}=//p" "$root/.env" | tail -n 1 | tr -d '\r')"
+    case "$value" in
+      \"*\") value="${value:1:${#value}-2}" ;;
+      \'*\') value="${value:1:${#value}-2}" ;;
+    esac
     if [ -n "$value" ]; then export "$name=$value"; fi
   fi
   return 0
 }
 
-settings=(ORACLE_ACCOUNT_ID NEAR_ACCOUNT_ID STORAGE_URL NEAR_NETWORK NEAR_RPC_URL NEAR_AI_URL POLL_INTERVAL_MS)
+settings=(ORACLE_ACCOUNT_ID NEAR_ACCOUNT_ID STORAGE_URL NEAR_NETWORK NEAR_AI_URL POLL_INTERVAL_MS)
 secrets=(NEAR_PRIVATE_KEY NEARAI_API_KEY)
-for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID "${settings[@]}" "${secrets[@]}"; do load "$name"; done
+for name in CLOUDFLARE_API_TOKEN CLOUDFLARE_ACCOUNT_ID NEAR_RPC_URL "${settings[@]}" "${secrets[@]}"; do load "$name"; done
 for name in ORACLE_ACCOUNT_ID NEAR_ACCOUNT_ID STORAGE_URL NEAR_PRIVATE_KEY NEARAI_API_KEY; do
   if [ -z "${!name:-}" ]; then
     echo "error: set $name in the environment or the root .env" >&2
@@ -38,12 +48,16 @@ for name in ORACLE_ACCOUNT_ID NEAR_ACCOUNT_ID STORAGE_URL NEAR_PRIVATE_KEY NEARA
   fi
 done
 # Settings left empty are unset, so the Keeper's defaults apply.
-for name in "${settings[@]}"; do
+for name in "${settings[@]}" NEAR_RPC_URL; do
   if [ -z "${!name:-}" ]; then unset "$name"; fi
 done
+if [ -n "${NEAR_RPC_URL:-}" ]; then secrets+=(NEAR_RPC_URL); fi
 
 # Relayer chains: every <CHAIN>_RELAYER_KEY in the environment or .env, with its <CHAIN>_RPC_URL.
-chains="$( { env; [ -f "$root/.env" ] && cat "$root/.env"; } | sed -n 's/^\([A-Z][A-Z0-9]*\)_RELAYER_KEY=..*/\1/p' | sort -u)"
+chains="$( {
+  env
+  if [ -f "$root/.env" ]; then cat "$root/.env"; fi
+} | sed -n 's/^\([A-Z][A-Z0-9]*\)_RELAYER_KEY=..*/\1/p' | sort -u)"
 relayers=()
 for chain in $chains; do
   load "${chain}_RELAYER_KEY"
