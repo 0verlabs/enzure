@@ -22,6 +22,7 @@ function assertion(id: number, overrides: Partial<OracleAssertion> = {}): Oracle
     dispute: null,
     ai_verdicts: [],
     appeal_window_ends_at_ns: null,
+    appeal: null,
     ...overrides,
   };
 }
@@ -34,6 +35,7 @@ const disputed = (id: number, disputedAt: bigint) =>
       evidence_hash: null,
       seed: 7,
       disputed_at_ns: String(disputedAt),
+      ai_verdict_deadline_ns: String(disputedAt + 3_600n * SEC),
     },
   });
 

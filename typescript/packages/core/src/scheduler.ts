@@ -1,47 +1,5 @@
-import {
-  SIGN_HOOK_DEPOSIT_YOCTO,
-  SIGN_HOOK_GAS,
-  evmHooksToSign,
-  type AssertionView,
-} from "./relayer.ts";
-
-/** A dispute as the oracle's Assertion views return it. */
-export interface DisputeView {
-  disputer: string;
-  /** sha256 of the Disputer's Evidence, lowercase hex, or null if none. */
-  evidence_hash: string | null;
-  seed: number;
-  disputed_at_ns: string;
-}
-
-/** An accepted AI Verdict as the oracle's Assertion views return it. */
-export interface AiVerdictView {
-  verdict: "TRUE" | "FALSE" | "UNRESOLVABLE" | (string & {});
-  request_hash: string;
-  response_hash: string;
-  public_key: string;
-  accepted_at_ns: string;
-}
-
-/**
- * An Assertion as `get_assertion` and `list_assertions` return it, with
- * everything the Scheduler and Resolver read. Timestamps are nanoseconds
- * since the Unix epoch, as decimal strings.
- */
-export interface OracleAssertion extends AssertionView {
-  asserter: string;
-  claim_hash: string;
-  evidence_hash: string | null;
-  bond: string;
-  asserted_at_ns: string;
-  liveness_ends_at_ns: string;
-  settled_at_ns: string | null;
-  outcome: boolean | null;
-  prompt_template_version: number | null;
-  dispute: DisputeView | null;
-  ai_verdicts: readonly AiVerdictView[];
-  appeal_window_ends_at_ns: string | null;
-}
+import type { OracleAssertion } from "./oracle-reads.ts";
+import { SIGN_HOOK_DEPOSIT_YOCTO, SIGN_HOOK_GAS, evmHooksToSign } from "./relayer.ts";
 
 /** A permissionless oracle call that is due now, with the gas (yoctoNEAR deposit) to attach. */
 export interface DueCall {

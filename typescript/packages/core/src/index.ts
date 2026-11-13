@@ -43,6 +43,8 @@ export {
   nearRpcView,
   timelineTransactions,
   type AiVerdictView,
+  type AppealView,
+  type AssertionState,
   type DisputeView,
   type ExplorerOptions,
   type ExplorerTransaction,
@@ -80,15 +82,7 @@ export {
   type SignedResultCheck,
   type SignedResultView,
 } from "./relayer.ts";
-export {
-  SCHEDULER_GAS,
-  dueCalls,
-  type AiVerdictView,
-  type DisputeView,
-  type DueCall,
-  type DueCallOptions,
-  type OracleAssertion,
-} from "./scheduler.ts";
+export { SCHEDULER_GAS, dueCalls, type DueCall, type DueCallOptions } from "./scheduler.ts";
 export {
   NEAR_AI_URL,
   SUBMIT_AI_VERDICT_GAS,

@@ -108,9 +108,11 @@ const posted: OracleAssertion = {
   settled_at_ns: null,
   outcome: null,
   hooks: [],
+  prompt_template_version: 1,
   dispute: null,
   ai_verdicts: [],
   appeal_window_ends_at_ns: null,
+  appeal: null,
 };
 
 test("a fresh Assertion's timeline shows it posted and Liveness running", () => {
@@ -131,6 +133,7 @@ test("a ruled and settled Assertion's timeline lists each step in order", () => 
       evidence_hash: "bb".repeat(32),
       seed: 7,
       disputed_at_ns: "1010000000000",
+      ai_verdict_deadline_ns: "4610000000000",
     },
     ai_verdicts: [
       {

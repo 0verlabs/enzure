@@ -6,12 +6,18 @@ import type { AssertionView, OracleView } from "./relayer.ts";
  * explorer API (there is no indexer of our own).
  */
 
+/** An Assertion's state, as the oracle's `State` enum serializes it. */
+export type AssertionState = "asserted" | "disputed" | "ruled" | "in_appeal" | "settled";
+
 /** A dispute as `get_assertion` returns it. */
 export interface DisputeView {
   disputer: string;
+  /** sha256 of the Disputer's Evidence, lowercase hex, or null if none. */
   evidence_hash: string | null;
   seed: number;
   disputed_at_ns: string;
+  /** With no AI Verdict by this time, anyone can call `check_timeout`. Fixed at dispute time. */
+  ai_verdict_deadline_ns: string;
 }
 
 /** An accepted AI Verdict as `get_assertion` returns it. */
@@ -23,25 +29,41 @@ export interface AiVerdictView {
   accepted_at_ns: string;
 }
 
+/** An Appeal as `get_assertion` returns it. It stays set after the Assertion settles. */
+export interface AppealView {
+  reason: "appealed" | "conflicting" | "unresolvable" | "no_verdict";
+  /** The party that appealed with a bond; null unless `reason` is `appealed`. */
+  appellant: string | null;
+  /** The appeal bond in yoctoNEAR; null unless `reason` is `appealed`. */
+  appeal_bond: string | null;
+  started_at_ns: string;
+  /** The DAO can rule until this time; from then on anyone can `settle`. */
+  dao_deadline_ns: string;
+}
+
 /**
  * An Assertion with every field `get_assertion` and `list_assertions` return.
- * Amounts are yoctoNEAR and timestamps nanoseconds, as decimal strings.
- * Fields added by later contract versions are optional, so an older
- * deployment still reads.
+ * Amounts are yoctoNEAR and timestamps nanoseconds since the Unix epoch, as
+ * decimal strings.
  */
 export interface OracleAssertion extends AssertionView {
   asserter: string;
   claim_hash: string;
   evidence_hash: string | null;
   bond: string;
+  state: AssertionState;
   asserted_at_ns: string;
   liveness_ends_at_ns: string;
   settled_at_ns: string | null;
   outcome: boolean | null;
-  prompt_template_version?: number | null;
-  dispute?: DisputeView | null;
-  ai_verdicts?: readonly AiVerdictView[];
-  appeal_window_ends_at_ns?: string | null;
+  prompt_template_version: number | null;
+  dispute: DisputeView | null;
+  /** Oldest first; two after Conflicting Verdicts. */
+  ai_verdicts: readonly AiVerdictView[];
+  /** Set once a TRUE or FALSE first AI Verdict is accepted. */
+  appeal_window_ends_at_ns: string | null;
+  /** Set once the Assertion goes to Appeal. */
+  appeal: AppealView | null;
 }
 
 export interface NearRpcOptions {

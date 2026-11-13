@@ -1,7 +1,7 @@
 import { checkContent, MAX_CONTENT_BYTES } from "./content.ts";
 import type { Verdict } from "./ai-request.ts";
 import type { OracleView } from "./relayer.ts";
-import type { OracleAssertion } from "./scheduler.ts";
+import type { OracleAssertion } from "./oracle-reads.ts";
 import { checkSignedResponse, type ResponseSignature } from "./signature.ts";
 import { parseVerdict } from "./verdict.ts";
 
