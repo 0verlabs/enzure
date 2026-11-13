@@ -5,26 +5,33 @@ use near_sdk::env;
 /// Parses a sha256 hash in hex, upper or lower case. Panics with a message
 /// naming `field` if it isn't 64 hex characters.
 pub fn parse(field: &str, hex: &str) -> [u8; 32] {
-    let invalid =
-        || -> ! { env::panic_str(&format!("{field} must be a sha256 hash: 64 hex characters")) };
-    let bytes = hex.as_bytes();
-    if bytes.len() != 64 {
-        invalid();
-    }
-    let mut hash = [0u8; 32];
-    for (i, pair) in bytes.chunks_exact(2).enumerate() {
-        match (nibble(pair[0]), nibble(pair[1])) {
-            (Some(high), Some(low)) => hash[i] = (high << 4) | low,
-            _ => invalid(),
-        }
-    }
-    hash
+    parse_bytes(hex).unwrap_or_else(|| {
+        env::panic_str(&format!("{field} must be a sha256 hash: 64 hex characters"))
+    })
 }
 
-/// Formats a hash as lowercase hex.
-pub fn to_hex(hash: &[u8; 32]) -> String {
+/// Decodes exactly `N` bytes of hex, upper or lower case, or returns None.
+pub fn parse_bytes<const N: usize>(hex: &str) -> Option<[u8; N]> {
+    let bytes = hex.as_bytes();
+    if bytes.len() != N * 2 {
+        return None;
+    }
+    let mut out = [0u8; N];
+    for (i, pair) in bytes.chunks_exact(2).enumerate() {
+        out[i] = (nibble(pair[0])? << 4) | nibble(pair[1])?;
+    }
+    Some(out)
+}
+
+/// The sha256 of `bytes`.
+pub fn sha256(bytes: impl AsRef<[u8]>) -> [u8; 32] {
+    env::sha256_array(bytes)
+}
+
+/// Formats bytes as lowercase hex.
+pub fn to_hex<const N: usize>(hash: &[u8; N]) -> String {
     const DIGITS: &[u8; 16] = b"0123456789abcdef";
-    let mut hex = String::with_capacity(64);
+    let mut hex = String::with_capacity(N * 2);
     for byte in hash {
         hex.push(DIGITS[usize::from(byte >> 4)] as char);
         hex.push(DIGITS[usize::from(byte & 0x0f)] as char);
