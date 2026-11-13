@@ -36,3 +36,15 @@ export {
   type EvmSignature,
   type ResultMessage,
 } from "./result-message.ts";
+export {
+  checkSignedResult,
+  evmHooksToRelay,
+  evmHooksToSign,
+  resultMessageOf,
+  type AssertionView,
+  type EvmHookRef,
+  type EvmHookView,
+  type HookView,
+  type SignedResultCheck,
+  type SignedResultView,
+} from "./relayer.ts";
