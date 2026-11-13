@@ -7,9 +7,12 @@ export {
   type Verdict,
 } from "./ai-request.ts";
 export {
+  attestedSigningKey,
   checkAttestedSigner,
+  fetchAttestationReport,
   type AttestationReport,
   type AttestedSignerCheck,
+  type AttestedSigningKey,
   type ModelAttestation,
 } from "./attestation.ts";
 export {

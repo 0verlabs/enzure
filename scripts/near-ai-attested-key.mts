@@ -10,19 +10,19 @@
 //
 //   node --env-file-if-exists=.env scripts/near-ai-attested-key.mts [--model <id>]
 //
-// Needs NEARAI_API_KEY. It does not check Intel's signature over the quote or
-// the measured software; scripts/check-near-ai-signing.mts additionally checks a
-// real signed response end to end.
+// Needs NEARAI_API_KEY; NEAR_AI_URL overrides core's NEAR AI Cloud URL. The
+// selection and checks are core's `attestedSigningKey`. It does not check
+// Intel's signature over the quote or the measured software;
+// scripts/check-near-ai-signing.mts additionally checks a real signed response
+// end to end.
 
 import { randomBytes } from "node:crypto";
 import { parseArgs } from "node:util";
 import {
   PROMPT_TEMPLATE_V1,
-  checkAttestedSigner,
-  type AttestationReport,
+  attestedSigningKey,
+  fetchAttestationReport,
 } from "../typescript/packages/core/src/index.ts";
-
-const API = "https://cloud-api.near.ai/v1";
 
 const { values: args } = parseArgs({ options: { model: { type: "string" } } });
 const modelId = args.model ?? PROMPT_TEMPLATE_V1.modelId;
@@ -30,43 +30,29 @@ const apiKey = process.env.NEARAI_API_KEY;
 if (!apiKey) fail("set NEARAI_API_KEY (see .env.example)");
 
 const nonce = randomBytes(32).toString("hex");
-const url = new URL(`${API}/attestation/report`);
-url.search = new URLSearchParams({
-  model: modelId,
-  provider: "near",
-  signing_algo: "ed25519",
-  include_tls_fingerprint: "false",
+const report = await fetchAttestationReport({
+  apiKey,
+  modelId,
   nonce,
-}).toString();
-const response = await fetch(url, {
-  headers: { Authorization: `Bearer ${apiKey}`, Accept: "application/json", "x-no-aliasing": "true" },
-});
-if (!response.ok) fail(`attestation report: HTTP ${response.status} ${await response.text()}`);
-const report = (await response.json()) as AttestationReport;
-const keys = [
-  ...new Set(
-    (report.model_attestations ?? [])
-      .filter((entry) => entry.signing_algo === "ed25519" && entry.model_name === modelId)
-      .map((entry) => entry.signing_address.replace(/^0x/, "").toLowerCase()),
-  ),
-];
-if (keys.length !== 1) fail(`expected one ed25519 attestation for ${modelId}, got ${keys.length}`);
-const [key] = keys as [string];
-const check = checkAttestedSigner(report, { modelId, signingKey: key, nonce });
+  ...(process.env.NEAR_AI_URL ? { nearAiUrl: process.env.NEAR_AI_URL } : {}),
+}).catch((error: unknown) => fail(error instanceof Error ? error.message : String(error)));
+const found = attestedSigningKey(report, { modelId, nonce });
+if (!found.check) fail(found.ok ? "no attestation check" : found.error);
+const check = found.check;
 
 const rows: [string, unknown][] = [
   ["model id", modelId],
   ["nonce sent", nonce],
-  ["attested ed25519 key", key],
+  ["attested ed25519 key", found.ok ? found.key : "(failed)"],
   ["attestation candidates", check.matchingCandidates],
   ["attestation echoes nonce", check.nonceEchoed],
   ["quote report data", check.reportData ?? "(unreadable)"],
   ["quote binds key + nonce", check.reportDataBindsKey],
 ];
 for (const [label, value] of rows) console.error(`${label.padEnd(26)} ${value}`);
-if (!check.valid) fail("the attestation check failed; do not register this key");
+if (!found.ok) fail(`${found.error}; do not register this key`);
 console.error("OK: the key is bound to a fresh TDX quote for this model.");
-console.log(key);
+console.log(found.key);
 
 function fail(message: string): never {
   console.error(`error: ${message}`);
