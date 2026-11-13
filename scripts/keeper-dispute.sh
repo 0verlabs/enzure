@@ -20,7 +20,7 @@
 #   BOND_YOCTO          bond in yoctoNEAR (1 NEAR)
 #   ORACLE_BALANCE      NEAR given to the development account ("4 NEAR")
 #   ORACLE_ACCOUNT_ID   reuse an oracle already set up by this script
-#   NO_KEEPER=1         don't start a Keeper; wait for one already running (on Render)
+#   NO_KEEPER=1         don't start a Keeper; wait for one already running on this oracle
 #
 # Needs about 7 testnet NEAR: ORACLE_BALANCE stays on the development account
 # (delete it to recover it); the winner's bonds come back through withdraw.

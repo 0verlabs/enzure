@@ -71,7 +71,7 @@ node examples/escrow/agent/buyer.mts job --job 1                    # status and
 node examples/escrow/agent/buyer.mts reclaim --job 1                # after the deadline, if no result came
 ```
 
-The Keeper (`typescript/apps/keeper`, with `EVM_RPC_URL` and `EVM_PRIVATE_KEY` set so the Relayer is on) does the rest.
+The Keeper (`typescript/apps/keeper`, with `BASE_RPC_URL` and `BASE_RELAYER_KEY` set so the Base Relayer is on) does the rest. `demo.sh` starts it with `EVM_RPC_URL` and `EVM_PRIVATE_KEY` as those two.
 
 ### Against a local chain
 
