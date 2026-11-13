@@ -1,6 +1,8 @@
 //! Disputes and AI Verdicts: a test ed25519 key stands in for NEAR AI Cloud and
 //! `dao.sandbox` acts as the DAO.
 mod common;
+#[path = "common/evm.rs"]
+mod evm;
 
 use common::ai::*;
 use common::*;
@@ -766,3 +768,107 @@ async fn claim_and_evidence_bytes_are_never_stored_and_the_dispute_deposit_cover
     Ok(())
 }
 
+/// A disputed Assertion's Hooks get the AI Verdict's outcome: settling it calls
+/// the NEAR Consumer and lets anyone sign the EVM Hook.
+#[tokio::test]
+async fn settling_a_ruled_assertion_delivers_near_hooks_and_allows_evm_hook_signing() -> TestResult
+{
+    let evm = evm::EvmWorld::new().await?;
+    let world = &evm.world;
+    let asserter = world.create_account("asserter").await?;
+    let disputer = world.create_account("disputer").await?;
+    let resolver = world.create_account("resolver").await?;
+    world
+        .publish_template(template(MODEL, "Judge the claim."))
+        .await?;
+    let key = TestKey::new(7);
+    world.register_key(&key, MODEL).await?;
+    short_appeal_window(world).await?;
+    let consumer = world
+        .deploy(
+            "consumer",
+            example_near_consumer_wasm(),
+            Some(("new", json!({ "oracle": world.oracle }))),
+        )
+        .await?;
+
+    let content = Content::new("The sky is green.", None, None);
+    let hooks = json!([
+        { "near": { "consumer": consumer, "gas": near_api::NearGas::from_tgas(20) } },
+        evm::evm_hook(),
+    ]);
+    let used_before = world.storage_usage(&world.oracle).await?;
+    let id: u64 = world
+        .call(
+            &asserter,
+            "assert_claim",
+            json!({
+                "claim_hash": sha256_hex(&content.claim),
+                "bond": BOND,
+                "liveness": 600,
+                "hooks": hooks,
+            }),
+            BOND.saturating_add(world.storage_deposit_for(2).await?),
+        )
+        .await?
+        .json()?;
+    world.dispute_ok(&disputer, id, &content, BOND).await?;
+    world
+        .submit_signed_verdict(&resolver, id, &content, &key, "FALSE")
+        .await?
+        .assert_success();
+    let assertion = world.assertion(id).await?;
+    assert_eq!(assertion["state"], "ruled");
+    assert_eq!(assertion["hooks"][0]["near"]["status"], "pending");
+    let early = evm.sign_hook(&resolver, id, 1, ONE_YOCTO).await?;
+    assert!(failure_message(early).contains("not settled"));
+
+    world
+        .advance_clock_to(parse_ns(&assertion["appeal_window_ends_at_ns"]))
+        .await?;
+    let settled = world.settle(&resolver, id).await?;
+    let half = NearToken::from_yoctonear(BOND.as_yoctonear() / 2);
+    assert_eq!(
+        enzure_events(&settled),
+        [
+            (
+                "assertion_settled".to_string(),
+                json!({
+                    "assertion_id": id,
+                    "outcome": false,
+                    "payouts": [
+                        { "account_id": disputer, "amount": BOND.saturating_add(half) },
+                        { "account_id": world.dao, "amount": half },
+                    ],
+                }),
+            ),
+            (
+                "near_hook_delivered".to_string(),
+                json!({ "assertion_id": id, "hook_index": 0, "consumer": consumer }),
+            ),
+        ]
+    );
+    let recorded: Option<bool> = world
+        .view_contract(&consumer, "get_outcome", json!({ "assertion_id": id }))
+        .await?;
+    assert_eq!(recorded, Some(false));
+
+    let signed = evm.sign_hook(&resolver, id, 1, ONE_YOCTO).await?;
+    assert!(signed.json::<bool>()?);
+    let result = evm.signed_result(id, 1).await?;
+    assert_eq!(result["outcome"], false);
+    assert_eq!(result["assertion_id"], id);
+
+    // The Assertion, its Hooks, the dispute and both payouts fit what was paid.
+    let used = world.storage_usage(&world.oracle).await? - used_before;
+    let paid = world
+        .storage_deposit_for(2)
+        .await?
+        .saturating_add(world.dispute_storage_deposit().await?);
+    let byte_cost = NearToken::from_yoctonear(10u128.pow(19));
+    assert!(
+        byte_cost.saturating_mul(used.into()) <= paid,
+        "{used} bytes, more than the deposits pay for"
+    );
+    Ok(())
+}
