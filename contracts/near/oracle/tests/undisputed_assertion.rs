@@ -480,11 +480,12 @@ async fn only_the_dao_changes_the_config() -> TestResult {
             "dao": world.dao,
             "min_bond": NearToken::from_near(1),
             "default_liveness": 7200,
+            "appeal_window": 86400,
         })
     );
 
     let new_config = serde_json::json!({
-        "config": { "min_bond": NearToken::from_near(5), "default_liveness": 300 }
+        "config": { "min_bond": NearToken::from_near(5), "default_liveness": 300, "appeal_window": 120 }
     });
     let by_stranger = world
         .call(&asserter, "set_config", new_config.clone(), ONE_YOCTO)
@@ -500,7 +501,7 @@ async fn only_the_dao_changes_the_config() -> TestResult {
         .await?;
     assert!(failure_message(without_yocto).contains("exactly 1 yoctoNEAR"));
     let bad_liveness = serde_json::json!({
-        "config": { "min_bond": NearToken::from_near(5), "default_liveness": 30 }
+        "config": { "min_bond": NearToken::from_near(5), "default_liveness": 30, "appeal_window": 120 }
     });
     let rejected = world
         .call(&world.dao, "set_config", bad_liveness, ONE_YOCTO)
@@ -514,7 +515,11 @@ async fn only_the_dao_changes_the_config() -> TestResult {
         enzure_events(&changed),
         [(
             "config_changed".to_string(),
-            serde_json::json!({ "min_bond": NearToken::from_near(5), "default_liveness": 300 }),
+            serde_json::json!({
+                "min_bond": NearToken::from_near(5),
+                "default_liveness": 300,
+                "appeal_window": 120,
+            }),
         )]
     );
     let config: serde_json::Value = world.view("get_config", serde_json::json!({})).await?;
@@ -523,6 +528,7 @@ async fn only_the_dao_changes_the_config() -> TestResult {
         serde_json::json!(NearToken::from_near(5))
     );
     assert_eq!(config["default_liveness"], 300);
+    assert_eq!(config["appeal_window"], 120);
 
     // The new settings apply to the next Assertion.
     let small = world.post(&asserter, NearToken::from_near(4), None).await?;

@@ -2,6 +2,8 @@
 use near_sdk::json_types::U64;
 use near_sdk::{AccountId, NearToken, near};
 
+use crate::ai::Verdict;
+
 /// An amount credited to an account's withdrawable balance.
 #[near(serializers = [json])]
 #[derive(Clone, Debug)]
@@ -42,5 +44,38 @@ pub enum Event {
     ConfigChanged {
         min_bond: NearToken,
         default_liveness: u64,
+        appeal_window: u64,
+    },
+    #[event_version("1.0.0")]
+    AssertionDisputed {
+        assertion_id: u64,
+        disputer: AccountId,
+        evidence_hash: Option<String>,
+        bond: NearToken,
+        /// The seed the AI request uses.
+        seed: u32,
+    },
+    #[event_version("1.0.0")]
+    AiVerdictAccepted {
+        assertion_id: u64,
+        verdict: Verdict,
+        /// The account that submitted it.
+        resolver: AccountId,
+        request_hash: String,
+        response_hash: String,
+        public_key: String,
+        appeal_window_ends_at_ns: U64,
+    },
+    #[event_version("1.0.0")]
+    PromptTemplatePublished { version: u32, model_id: String },
+    #[event_version("1.0.0")]
+    RegisteredKeyAdded {
+        public_key: String,
+        model_id: String,
+    },
+    #[event_version("1.0.0")]
+    RegisteredKeyRemoved {
+        public_key: String,
+        model_id: String,
     },
 }

@@ -2,6 +2,8 @@
 //! oracle only through its public methods, views, events and account balances.
 #![allow(dead_code)]
 
+pub mod ai;
+
 use std::sync::{Arc, OnceLock};
 
 use near_api::types::transaction::result::{ExecutionFinalResult, TransactionResult};
@@ -18,12 +20,30 @@ pub const CLAIM_HASH: &str = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd1
 pub const EVIDENCE_HASH: &str = "60303ae22b998861bce3b28f33eec1be758a213c86c93c076dbe9f558c11c752";
 
 static ORACLE_WASM: OnceLock<Vec<u8>> = OnceLock::new();
+static ORACLE_TEST_SEED_WASM: OnceLock<Vec<u8>> = OnceLock::new();
 static SELF_DELETING_ACCOUNT_WASM: OnceLock<Vec<u8>> = OnceLock::new();
 
 /// Builds the oracle once per test binary.
 pub fn oracle_wasm() -> &'static [u8] {
     ORACLE_WASM.get_or_init(|| {
         let path = cargo_near_build::build_with_cli(Default::default()).expect("oracle builds");
+        std::fs::read(path).expect("oracle wasm is readable")
+    })
+}
+
+/// Builds the oracle with the `test-seed` feature, which adds `set_test_seed`
+/// so a test can replay a fixture signed for a known seed. Written to its own
+/// folder so it never replaces the production build.
+pub fn oracle_test_seed_wasm() -> &'static [u8] {
+    ORACLE_TEST_SEED_WASM.get_or_init(|| {
+        let opts = cargo_near_build::BuildOpts::builder()
+            .features("test-seed")
+            .out_dir(concat!(
+                env!("CARGO_MANIFEST_DIR"),
+                "/../target/near/oracle-test-seed"
+            ))
+            .build();
+        let path = cargo_near_build::build_with_cli(opts).expect("oracle builds with test-seed");
         std::fs::read(path).expect("oracle wasm is readable")
     })
 }
@@ -55,7 +75,12 @@ pub struct World {
 
 impl World {
     pub async fn new() -> TestResult<Self> {
-        let wasm = oracle_wasm().to_vec();
+        Self::with_wasm(oracle_wasm()).await
+    }
+
+    /// A sandbox with the given oracle build deployed.
+    pub async fn with_wasm(wasm: &[u8]) -> TestResult<Self> {
+        let wasm = wasm.to_vec();
         let sandbox = near_sandbox::Sandbox::start_sandbox().await?;
         let network = NetworkConfig::from_rpc_url("sandbox", sandbox.rpc_addr.parse()?);
         let signer = Signer::from_secret_key(

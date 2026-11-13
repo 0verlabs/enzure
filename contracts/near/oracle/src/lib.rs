@@ -1,22 +1,29 @@
 //! Enzure oracle: Assertions are posted with a NEAR bond and settle TRUE after
 //! Liveness unless disputed. Vocabulary follows `GLOSSARY.md` at the repo root.
 use near_sdk::json_types::U64;
-use near_sdk::store::LookupMap;
+use near_sdk::store::{IterableMap, LookupMap, Vector};
 use near_sdk::{
     AccountId, BorshStorageKey, Gas, NearToken, PanicOnDefault, Promise, env, near, require,
 };
 
+mod ai;
+mod dispute;
 mod events;
 mod hash;
+mod registry;
 
+pub use ai::{PromptTemplate, Verdict};
+pub use dispute::{AiVerdictView, DisputeView};
 pub use events::{Event, Payout};
+pub use registry::RegisteredKeyView;
 
-const NS_PER_SEC: u64 = 1_000_000_000;
+pub(crate) const NS_PER_SEC: u64 = 1_000_000_000;
 /// Shortest Liveness an Asserter can choose, in seconds.
 pub const MIN_LIVENESS_SECS: u64 = 60;
 /// Longest Liveness an Asserter can choose, in seconds.
 pub const MAX_LIVENESS_SECS: u64 = 7 * 24 * 60 * 60;
 const DEFAULT_LIVENESS_SECS: u64 = 2 * 60 * 60;
+const DEFAULT_APPEAL_WINDOW_SECS: u64 = 24 * 60 * 60;
 const DEFAULT_MIN_BOND: NearToken = NearToken::from_near(1);
 const DEFAULT_PAGE_SIZE: u32 = 20;
 const MAX_PAGE_SIZE: u32 = 100;
@@ -32,6 +39,8 @@ const ASSERTION_STORAGE_BYTES: u64 = 500;
 enum StorageKey {
     Assertions,
     Balances,
+    PromptTemplates,
+    RegisteredKeys,
 }
 
 /// Settings the DAO can change.
@@ -42,6 +51,8 @@ pub struct Config {
     pub min_bond: NearToken,
     /// Liveness, in seconds, for Assertions posted without one.
     pub default_liveness: u64,
+    /// How long, in seconds, the Appeal Window stays open after an AI Verdict.
+    pub appeal_window: u64,
 }
 
 /// The config as the `get_config` view returns it.
@@ -51,6 +62,7 @@ pub struct ConfigView {
     pub dao: AccountId,
     pub min_bond: NearToken,
     pub default_liveness: u64,
+    pub appeal_window: u64,
 }
 
 /// A Hook delivers a settled Assertion's outcome to a Consumer. Hooks arrive in a
@@ -61,7 +73,17 @@ pub enum Hook {}
 #[near(serializers = [borsh])]
 enum AssertionState {
     Asserted,
-    Settled { outcome: bool, settled_at_ns: u64 },
+    /// Disputed during Liveness; waiting for an AI Verdict.
+    Disputed,
+    /// An AI Verdict of TRUE or FALSE was accepted; it becomes the outcome once
+    /// the Appeal Window closes.
+    Ruled {
+        outcome: bool,
+    },
+    Settled {
+        outcome: bool,
+        settled_at_ns: u64,
+    },
 }
 
 #[near(serializers = [borsh])]
@@ -73,6 +95,11 @@ struct Assertion {
     asserted_at_ns: u64,
     liveness_ends_at_ns: u64,
     state: AssertionState,
+    /// The Prompt Template version current when the Assertion was posted.
+    prompt_template_version: Option<u32>,
+    dispute: Option<dispute::Dispute>,
+    /// Accepted AI Verdicts, oldest first.
+    ai_verdicts: Vec<dispute::AcceptedVerdict>,
 }
 
 /// Where an Assertion is in its lifecycle.
@@ -82,6 +109,10 @@ struct Assertion {
 pub enum State {
     /// Posted; it settles TRUE once Liveness ends.
     Asserted,
+    /// Disputed; waiting for an AI Verdict.
+    Disputed,
+    /// Has an AI Verdict; it settles with it once the Appeal Window closes.
+    Ruled,
     Settled,
 }
 
@@ -103,6 +134,14 @@ pub struct AssertionView {
     pub settled_at_ns: Option<U64>,
     /// The settled outcome; null until the Assertion settles.
     pub outcome: Option<bool>,
+    /// The Prompt Template version an AI Verdict must use; null if none was
+    /// published when the Assertion was posted.
+    pub prompt_template_version: Option<u32>,
+    pub dispute: Option<DisputeView>,
+    /// Accepted AI Verdicts, oldest first.
+    pub ai_verdicts: Vec<AiVerdictView>,
+    /// When the Appeal Window closes; set once an AI Verdict is accepted.
+    pub appeal_window_ends_at_ns: Option<U64>,
 }
 
 #[near(contract_state)]
@@ -114,6 +153,10 @@ pub struct Oracle {
     /// Id of the newest Assertion; ids start at 1, so 0 means none yet.
     last_assertion_id: u64,
     balances: LookupMap<AccountId, NearToken>,
+    /// Prompt Template versions; version `n` is at index `n - 1`.
+    prompt_templates: Vector<PromptTemplate>,
+    /// Registered Keys: ed25519 public keys and the model id each signs for.
+    registered_keys: IterableMap<[u8; 32], String>,
 }
 
 #[near]
@@ -127,10 +170,13 @@ impl Oracle {
             config: Config {
                 min_bond: DEFAULT_MIN_BOND,
                 default_liveness: DEFAULT_LIVENESS_SECS,
+                appeal_window: DEFAULT_APPEAL_WINDOW_SECS,
             },
             assertions: LookupMap::new(StorageKey::Assertions),
             last_assertion_id: 0,
             balances: LookupMap::new(StorageKey::Balances),
+            prompt_templates: Vector::new(StorageKey::PromptTemplates),
+            registered_keys: IterableMap::new(StorageKey::RegisteredKeys),
         }
     }
 
@@ -183,6 +229,9 @@ impl Oracle {
             asserted_at_ns: now,
             liveness_ends_at_ns: now + liveness * NS_PER_SEC,
             state: AssertionState::Asserted,
+            prompt_template_version: self.current_prompt_template_version(),
+            dispute: None,
+            ai_verdicts: Vec::new(),
         };
         Event::AssertionPosted {
             assertion_id: id,
@@ -202,40 +251,58 @@ impl Oracle {
         id
     }
 
-    /// Settles an Assertion whose Liveness has ended without a dispute: it is
-    /// TRUE and the whole bond is credited to the Asserter's balance. Anyone can
-    /// call it. Returns the outcome.
+    /// Settles an Assertion. Anyone can call it. Returns the outcome.
+    ///
+    /// Undisputed, it settles TRUE once Liveness has ended and the whole bond is
+    /// credited to the Asserter. With an AI Verdict, it settles with that verdict
+    /// once the Appeal Window has closed: the winner gets their bond back plus
+    /// half the loser's, and the DAO gets the other half.
     pub fn settle(&mut self, assertion_id: u64) -> bool {
         let now = env::block_timestamp();
         let assertion = self
             .assertions
             .get_mut(&assertion_id)
             .unwrap_or_else(|| env::panic_str(&format!("Assertion {assertion_id} not found")));
-        require!(
-            matches!(assertion.state, AssertionState::Asserted),
-            "Assertion is already settled"
-        );
-        // Disputes will be allowed while `now < liveness_ends_at_ns` and
-        // settlement from then on, so no block allows both.
-        require!(
-            now >= assertion.liveness_ends_at_ns,
-            "Liveness has not ended"
-        );
-
-        let outcome = true;
+        let (outcome, payouts) = match assertion.state {
+            AssertionState::Asserted => {
+                // `dispute` is allowed only while `now < liveness_ends_at_ns`, so
+                // no block allows both.
+                require!(
+                    now >= assertion.liveness_ends_at_ns,
+                    "Liveness has not ended"
+                );
+                let payout = Payout {
+                    account_id: assertion.asserter.clone(),
+                    amount: assertion.bond,
+                };
+                (true, vec![payout])
+            }
+            AssertionState::Disputed => {
+                env::panic_str("Assertion is disputed and has no AI Verdict")
+            }
+            AssertionState::Ruled { outcome } => {
+                require!(
+                    now >= assertion.appeal_window_ends_at_ns().unwrap_or(u64::MAX),
+                    "Appeal Window has not ended"
+                );
+                (
+                    outcome,
+                    dispute::ruled_payouts(assertion, outcome, &self.dao),
+                )
+            }
+            AssertionState::Settled { .. } => env::panic_str("Assertion is already settled"),
+        };
         assertion.state = AssertionState::Settled {
             outcome,
             settled_at_ns: now,
         };
-        let payout = Payout {
-            account_id: assertion.asserter.clone(),
-            amount: assertion.bond,
-        };
-        self.credit(&payout.account_id, payout.amount);
+        for payout in &payouts {
+            self.credit(&payout.account_id, payout.amount);
+        }
         Event::AssertionSettled {
             assertion_id,
             outcome,
-            payouts: vec![payout],
+            payouts,
         }
         .emit();
         outcome
@@ -287,9 +354,11 @@ impl Oracle {
         );
         require!(!config.min_bond.is_zero(), "min_bond must be above zero");
         require_liveness_in_range("default_liveness", config.default_liveness);
+        require_liveness_in_range("appeal_window", config.appeal_window);
         Event::ConfigChanged {
             min_bond: config.min_bond,
             default_liveness: config.default_liveness,
+            appeal_window: config.appeal_window,
         }
         .emit();
         self.config = config;
@@ -326,8 +395,8 @@ impl Oracle {
     /// The outcome of a settled Assertion, or null while it is unsettled.
     pub fn get_outcome(&self, assertion_id: u64) -> Option<bool> {
         match self.assertion(assertion_id).state {
-            AssertionState::Asserted => None,
             AssertionState::Settled { outcome, .. } => Some(outcome),
+            _ => None,
         }
     }
 
@@ -344,6 +413,7 @@ impl Oracle {
             dao: self.dao.clone(),
             min_bond: self.config.min_bond,
             default_liveness: self.config.default_liveness,
+            appeal_window: self.config.appeal_window,
         }
     }
 }
@@ -378,6 +448,8 @@ impl Assertion {
     fn view(&self, id: u64) -> AssertionView {
         let (state, settled_at_ns, outcome) = match self.state {
             AssertionState::Asserted => (State::Asserted, None, None),
+            AssertionState::Disputed => (State::Disputed, None, None),
+            AssertionState::Ruled { .. } => (State::Ruled, None, None),
             AssertionState::Settled {
                 outcome,
                 settled_at_ns,
@@ -394,6 +466,14 @@ impl Assertion {
             liveness_ends_at_ns: U64(self.liveness_ends_at_ns),
             settled_at_ns,
             outcome,
+            prompt_template_version: self.prompt_template_version,
+            dispute: self.dispute.as_ref().map(dispute::Dispute::view),
+            ai_verdicts: self
+                .ai_verdicts
+                .iter()
+                .map(dispute::AcceptedVerdict::view)
+                .collect(),
+            appeal_window_ends_at_ns: self.appeal_window_ends_at_ns().map(U64),
         }
     }
 }
