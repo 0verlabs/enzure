@@ -15,24 +15,21 @@ export const SCHEDULER_GAS = "300000000000000";
 export interface DueCallOptions {
   /** The current time, in nanoseconds since the Unix epoch. */
   nowNs: bigint;
-  /**
-   * The oracle's AI Verdict deadline in seconds. Leave it undefined while the
-   * deployed oracle has no `check_timeout`; no timeouts are then due.
-   */
-  aiVerdictDeadlineSecs?: number;
 }
 
 /**
  * The Scheduler's work: the `settle`, `check_timeout` and `sign_hook` calls
  * the oracle would accept at `nowNs`. `settle` is due for an undisputed
- * Assertion from the end of Liveness and for a ruled one from the end of its
- * Appeal Window; `check_timeout` for a disputed Assertion with no AI Verdict
- * once the AI Verdict deadline has passed; `sign_hook` for every unsigned EVM
- * Hook of a settled Assertion.
+ * Assertion from the end of Liveness, for a ruled one from the end of its
+ * Appeal Window and for one In Appeal from its DAO deadline; `check_timeout`
+ * for a disputed Assertion with no AI Verdict from its dispute's AI Verdict
+ * deadline; `sign_hook` for every unsigned EVM Hook of a settled Assertion.
+ * Every deadline is read from the Assertion, where the oracle fixed it when
+ * the timer started.
  */
 export function dueCalls(
   assertions: readonly OracleAssertion[],
-  { nowNs, aiVerdictDeadlineSecs }: DueCallOptions,
+  { nowNs }: DueCallOptions,
 ): DueCall[] {
   const calls: DueCall[] = [];
   for (const assertion of assertions) {
@@ -51,12 +48,16 @@ export function dueCalls(
     ) {
       calls.push(call("settle"));
     } else if (
+      assertion.state === "in_appeal" &&
+      assertion.appeal !== null &&
+      nowNs >= BigInt(assertion.appeal.dao_deadline_ns)
+    ) {
+      calls.push(call("settle"));
+    } else if (
       assertion.state === "disputed" &&
-      aiVerdictDeadlineSecs !== undefined &&
       assertion.dispute !== null &&
       assertion.ai_verdicts.length === 0 &&
-      nowNs >=
-        BigInt(assertion.dispute.disputed_at_ns) + BigInt(aiVerdictDeadlineSecs) * 1_000_000_000n
+      nowNs >= BigInt(assertion.dispute.ai_verdict_deadline_ns)
     ) {
       calls.push(call("check_timeout"));
     }
