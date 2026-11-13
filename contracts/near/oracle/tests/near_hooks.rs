@@ -398,6 +398,40 @@ async fn posting_hooks_is_limited_by_the_config_and_the_asserter_pays_their_stor
 }
 
 #[tokio::test]
+async fn the_storage_deposit_grows_with_each_hook() -> TestResult {
+    let world = World::new().await?;
+    let asserter = world.create_account("asserter").await?;
+    let consumer = switchable_consumer(&world, "consumer", false).await?;
+    // 500 bytes for the Assertion plus 200 per Hook, at 10^19 yoctoNEAR a byte.
+    let byte_cost = NearToken::from_yoctonear(10u128.pow(19));
+    for hooks in 0..=4u32 {
+        assert_eq!(
+            world.storage_deposit_for(hooks).await?,
+            byte_cost.saturating_mul(u128::from(500 + 200 * hooks)),
+            "deposit for {hooks} Hooks"
+        );
+    }
+
+    // Paying for one Hook doesn't cover two.
+    let bond = NearToken::from_near(1);
+    let underpaid = world
+        .call(
+            &asserter,
+            "assert_claim",
+            json!({
+                "claim_hash": CLAIM_HASH,
+                "bond": bond,
+                "liveness": 60,
+                "hooks": [near_hook(&consumer, 10), near_hook(&consumer, 10)],
+            }),
+            bond.saturating_add(world.storage_deposit_for(1).await?),
+        )
+        .await?;
+    assert!(failure_message(underpaid).contains("Attach the bond plus the storage deposit"));
+    Ok(())
+}
+
+#[tokio::test]
 async fn the_dao_sets_the_hook_limits() -> TestResult {
     let world = World::new().await?;
     let asserter = world.create_account("asserter").await?;
