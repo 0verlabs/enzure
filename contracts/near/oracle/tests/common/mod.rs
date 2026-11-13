@@ -44,6 +44,41 @@ pub fn self_deleting_account_wasm() -> &'static [u8] {
     })
 }
 
+static SWITCHABLE_CONSUMER_WASM: OnceLock<Vec<u8>> = OnceLock::new();
+static EXAMPLE_NEAR_CONSUMER_WASM: OnceLock<Vec<u8>> = OnceLock::new();
+
+/// Builds a contract outside the oracle crate, sharing the workspace's target folder.
+fn build_contract(manifest: &str) -> Vec<u8> {
+    let target = concat!(env!("CARGO_MANIFEST_DIR"), "/../target");
+    let opts = cargo_near_build::BuildOpts::builder()
+        .manifest_path(manifest)
+        .no_abi(true)
+        .override_cargo_target_dir(target.to_string())
+        .build();
+    let path = cargo_near_build::build_with_cli(opts).expect("contract builds");
+    std::fs::read(path).expect("contract wasm is readable")
+}
+
+/// Builds the test-only Consumer in `tests/contracts/switchable_consumer`.
+pub fn switchable_consumer_wasm() -> &'static [u8] {
+    SWITCHABLE_CONSUMER_WASM.get_or_init(|| {
+        build_contract(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/contracts/switchable_consumer/Cargo.toml"
+        ))
+    })
+}
+
+/// Builds the example NEAR Consumer in the root `examples/near-consumer` folder.
+pub fn example_near_consumer_wasm() -> &'static [u8] {
+    EXAMPLE_NEAR_CONSUMER_WASM.get_or_init(|| {
+        build_contract(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../../examples/near-consumer/Cargo.toml"
+        ))
+    })
+}
+
 /// A sandbox with the oracle deployed and initialised with `dao.sandbox` as its DAO.
 pub struct World {
     pub sandbox: near_sandbox::Sandbox,
@@ -105,7 +140,7 @@ impl World {
             .await
     }
 
-    /// Calls any contract method as `signer_id`.
+    /// Calls any contract method as `signer_id`, with 300 TGas.
     pub async fn call_contract(
         &self,
         signer_id: &AccountId,
@@ -114,11 +149,32 @@ impl World {
         args: Value,
         deposit: NearToken,
     ) -> TestResult<ExecutionFinalResult> {
+        self.call_contract_with_gas(
+            signer_id,
+            contract,
+            method,
+            args,
+            deposit,
+            NearGas::from_tgas(300),
+        )
+        .await
+    }
+
+    /// Calls any contract method as `signer_id`, attaching `gas`.
+    pub async fn call_contract_with_gas(
+        &self,
+        signer_id: &AccountId,
+        contract: &AccountId,
+        method: &str,
+        args: Value,
+        deposit: NearToken,
+        gas: NearGas,
+    ) -> TestResult<ExecutionFinalResult> {
         let result = Contract(contract.clone())
             .call_function(method, args)
             .transaction()
             .deposit(deposit)
-            .gas(NearGas::from_tgas(300))
+            .gas(gas)
             .with_signer(signer_id.clone(), self.signer.clone())
             .send_to(&self.network)
             .await?;
@@ -128,6 +184,109 @@ impl World {
                 Err(format!("transaction still pending: {status:?}").into())
             }
         }
+    }
+
+    /// Creates `<name>.sandbox` and deploys `wasm` to it, calling `init` with
+    /// `init_args` if given.
+    pub async fn deploy(
+        &self,
+        name: &str,
+        wasm: &[u8],
+        init: Option<(&str, Value)>,
+    ) -> TestResult<AccountId> {
+        let id = self.create_account(name).await?;
+        let deploy = Contract::deploy(id.clone()).use_code(wasm.to_vec());
+        let result = match init {
+            Some((method, args)) => {
+                deploy
+                    .with_init_call(method, args)?
+                    .with_signer(self.signer.clone())
+                    .send_to(&self.network)
+                    .await?
+            }
+            None => {
+                deploy
+                    .without_init_call()
+                    .with_signer(self.signer.clone())
+                    .send_to(&self.network)
+                    .await?
+            }
+        };
+        result.assert_success();
+        Ok(id)
+    }
+
+    /// Calls a view method on any contract.
+    pub async fn view_contract<T: DeserializeOwned + Send + Sync>(
+        &self,
+        contract: &AccountId,
+        method: &str,
+        args: Value,
+    ) -> TestResult<T> {
+        Ok(Contract(contract.clone())
+            .call_function(method, args)
+            .read_only()
+            .fetch_from(&self.network)
+            .await?
+            .data)
+    }
+
+    /// Posts an Assertion with Hooks and a one-minute Liveness, attaching the bond
+    /// plus the storage deposit the oracle asks for that many Hooks.
+    pub async fn post_with_hooks(
+        &self,
+        asserter: &AccountId,
+        bond: NearToken,
+        hooks: Value,
+    ) -> TestResult<ExecutionFinalResult> {
+        let count = hooks.as_array().map_or(0, Vec::len);
+        let storage = self.storage_deposit_for(count as u32).await?;
+        self.call(
+            asserter,
+            "assert_claim",
+            json!({
+                "claim_hash": CLAIM_HASH,
+                "evidence_hash": EVIDENCE_HASH,
+                "bond": bond,
+                "liveness": 60,
+                "hooks": hooks,
+            }),
+            bond.saturating_add(storage),
+        )
+        .await
+    }
+
+    /// The storage deposit for an Assertion with `hooks` Hooks.
+    pub async fn storage_deposit_for(&self, hooks: u32) -> TestResult<NearToken> {
+        self.view("assertion_storage_deposit", json!({ "hooks": hooks }))
+            .await
+    }
+
+    /// Calls `settle` as `caller`, attaching `gas`.
+    pub async fn settle_with_gas(
+        &self,
+        caller: &AccountId,
+        id: u64,
+        gas: NearGas,
+    ) -> TestResult<ExecutionFinalResult> {
+        self.call_contract_with_gas(
+            caller,
+            &self.oracle,
+            "settle",
+            json!({ "assertion_id": id }),
+            NearToken::from_yoctonear(0),
+            gas,
+        )
+        .await
+    }
+
+    /// Waits for Liveness to end on the Assertion.
+    pub async fn wait_for_liveness(&self, id: u64) -> TestResult<()> {
+        let ends = self.assertion(id).await?["liveness_ends_at_ns"]
+            .as_str()
+            .expect("timestamp string")
+            .parse()?;
+        self.advance_clock_to(ends).await
     }
 
     /// Calls an oracle view method.
