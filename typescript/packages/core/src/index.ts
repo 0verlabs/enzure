@@ -102,6 +102,8 @@ export {
   prepareAiVerdict,
   type OracleCall,
   type ResolveResult,
+  type ResolverAttempt,
+  type ResolverMemory,
   type ResolverOptions,
   type ResolverPassResult,
   type SubmitAiVerdictArgs,

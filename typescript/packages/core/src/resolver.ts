@@ -258,35 +258,48 @@ export type ResolverPassResult =
   | { assertionId: number; status: "skipped"; reason: string }
   | { assertionId: number; status: "failed"; error: string };
 
+/** What a Resolver remembers about one Assertion: how often it was tried, and whether it is done. */
+export interface ResolverAttempt {
+  tries: number;
+  done: boolean;
+}
+
+/** Where a Resolver keeps its attempts, by Assertion id. A `Map` works; so does durable storage. */
+export interface ResolverMemory {
+  get(assertionId: number): ResolverAttempt | undefined;
+  set(assertionId: number, attempt: ResolverAttempt): void;
+}
+
 /**
  * A Resolver that remembers what it has done, so each disputed Assertion is
  * handled once: after a submitted or skipped AI Verdict it is never tried
  * again, and after failures it is retried on later passes up to
- * `maxAttempts` times (default 3). Memory lasts as long as the process; on a
- * restart, Assertions the oracle still shows as disputed are tried again.
+ * `maxAttempts` times (default 3). By default memory lasts as long as the
+ * process, and on a restart Assertions the oracle still shows as disputed are
+ * tried again; pass a durable `memory` to keep it across restarts.
  */
 export function createResolver(
   options: ResolverOptions & { call: OracleCall },
-  { maxAttempts = 3 }: { maxAttempts?: number } = {},
+  {
+    maxAttempts = 3,
+    memory = new Map<number, ResolverAttempt>(),
+  }: { maxAttempts?: number; memory?: ResolverMemory } = {},
 ) {
-  const done = new Set<number>();
-  const attempts = new Map<number, number>();
   return {
     /** Handles every disputed Assertion without an AI Verdict that isn't done yet, one at a time. */
     async pass(assertions: readonly OracleAssertion[]): Promise<ResolverPassResult[]> {
       const results: ResolverPassResult[] = [];
       for (const assertion of assertions) {
-        if (
-          assertion.state !== "disputed" ||
-          assertion.ai_verdicts.length > 0 ||
-          done.has(assertion.id)
-        ) {
-          continue;
-        }
-        const tries = (attempts.get(assertion.id) ?? 0) + 1;
-        attempts.set(assertion.id, tries);
+        if (assertion.state !== "disputed" || assertion.ai_verdicts.length > 0) continue;
+        const before = memory.get(assertion.id);
+        if (before?.done) continue;
+        const tries = (before?.tries ?? 0) + 1;
+        // Recorded before the attempt, so an attempt cut off midway still counts.
+        memory.set(assertion.id, { tries, done: false });
         const result = await resolve(options, assertion);
-        if (result.status !== "failed" || tries >= maxAttempts) done.add(assertion.id);
+        if (result.status !== "failed" || tries >= maxAttempts) {
+          memory.set(assertion.id, { tries, done: true });
+        }
         results.push(result);
       }
       return results;
