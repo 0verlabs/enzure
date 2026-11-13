@@ -1,7 +1,9 @@
-/**
- * Placeholder export so the package builds and has a test.
- * Remove it once core has real functions.
- */
-export function packageName(): string {
-  return "@enzure/core";
-}
+export {
+  checkContent,
+  contentHash,
+  isContentHash,
+  MAX_CONTENT_BYTES,
+  NEAR_MAX_TRANSACTION_BYTES,
+  RESPONSE_AND_OVERHEAD_BYTES,
+  type ContentCheck,
+} from "./content.ts";
