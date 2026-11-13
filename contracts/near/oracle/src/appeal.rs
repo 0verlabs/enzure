@@ -198,8 +198,12 @@ impl Oracle {
     }
 
     /// The DAO's ruling on an Assertion in Appeal, which settles it at once.
-    /// Only the DAO can call it, attaching one yoctoNEAR and enough gas to
-    /// deliver the NEAR Hooks, until the DAO deadline. Returns the outcome.
+    /// Only the DAO can call it, attaching one yoctoNEAR, until the DAO
+    /// deadline. Returns the outcome.
+    ///
+    /// The NEAR Hooks start as far as the call's gas allows (a Sputnik
+    /// proposal fixes it); the ruling never fails for lack of Hook gas, and
+    /// anyone delivers the Hooks left pending with `retry_near_hook`.
     ///
     /// The winner gets their bond back plus half the loser's, and the DAO the
     /// other half. An appellant who wins gets the appeal bond back; one who
@@ -229,7 +233,7 @@ impl Oracle {
             outcome: truthful,
         }
         .emit();
-        self.complete_settlement(assertion_id, truthful, payouts, now);
+        self.complete_settlement(assertion_id, truthful, payouts, now, false);
         truthful
     }
 }

@@ -298,7 +298,8 @@ impl Oracle {
     }
 
     /// Settles an Assertion. Anyone can call it, attaching enough gas to deliver
-    /// every NEAR Hook with its fixed gas. Returns the outcome.
+    /// every NEAR Hook with its fixed gas (at most 300 TGas: `set_config` keeps
+    /// the Hook limits within that). Returns the outcome.
     ///
     /// Undisputed, it settles TRUE once Liveness has ended and the whole bond is
     /// credited to the Asserter. With an AI Verdict, it settles with that verdict
@@ -341,7 +342,7 @@ impl Oracle {
             AssertionState::InAppeal => appeal::overdue_settlement(assertion, now, &self.dao),
             AssertionState::Settled { .. } => env::panic_str("Assertion is already settled"),
         };
-        self.complete_settlement(assertion_id, outcome, payouts, now);
+        self.complete_settlement(assertion_id, outcome, payouts, now, true);
         outcome
     }
 
@@ -487,25 +488,22 @@ impl Oracle {
         }
     }
 
-    /// Settles the Assertion with `outcome`: credits `payouts`, starts the NEAR
-    /// Hooks and emits `assertion_settled`. Panics, changing nothing, if the
-    /// attached gas can't deliver the NEAR Hooks.
+    /// Settles the Assertion with `outcome`: credits `payouts`, emits
+    /// `assertion_settled` and starts the NEAR Hooks. With `every_hook`, it
+    /// panics, changing nothing, if the attached gas can't deliver every NEAR
+    /// Hook; otherwise it starts the ones the remaining gas allows and leaves
+    /// the rest pending for `retry_near_hook`.
     fn complete_settlement(
         &mut self,
         assertion_id: u64,
         outcome: bool,
         payouts: Vec<Payout>,
         now: u64,
+        every_hook: bool,
     ) {
-        let assertion = self.assertion_mut(assertion_id);
-        hooks::require_gas_to_deliver(&assertion.hooks);
-        assertion.state = AssertionState::Settled {
-            outcome,
-            settled_at_ns: now,
-        };
-        // The Consumer calls run in later receipts, after this one has committed
-        // the settlement and the credits below.
-        hooks::deliver_all(assertion_id, outcome, &mut assertion.hooks);
+        if every_hook {
+            hooks::require_gas_to_deliver(&self.assertion(assertion_id).hooks);
+        }
         for payout in &payouts {
             self.credit(&payout.account_id, payout.amount);
         }
@@ -515,6 +513,18 @@ impl Oracle {
             payouts,
         }
         .emit();
+        let assertion = self.assertion_mut(assertion_id);
+        assertion.state = AssertionState::Settled {
+            outcome,
+            settled_at_ns: now,
+        };
+        // The Consumer calls run in later receipts, after this one has committed
+        // the settlement and the credits above.
+        if every_hook {
+            hooks::deliver_all(assertion_id, outcome, &mut assertion.hooks);
+        } else {
+            hooks::deliver_what_fits(assertion_id, outcome, &mut assertion.hooks);
+        }
     }
 
     fn assertion_mut(&mut self, id: u64) -> &mut Assertion {
