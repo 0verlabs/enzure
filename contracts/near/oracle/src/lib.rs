@@ -14,6 +14,7 @@ mod evm_hooks;
 mod hash;
 mod hooks;
 mod registry;
+mod upgrade;
 
 pub use ai::{PromptTemplate, Verdict};
 pub use appeal::{AppealReason, AppealView};

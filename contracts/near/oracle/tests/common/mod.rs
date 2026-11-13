@@ -224,6 +224,31 @@ impl World {
         }
     }
 
+    /// Calls an oracle method as `signer_id` with raw argument bytes, not JSON,
+    /// attaching 300 TGas.
+    pub async fn call_raw(
+        &self,
+        signer_id: &AccountId,
+        method: &str,
+        args: Vec<u8>,
+        deposit: NearToken,
+    ) -> TestResult<ExecutionFinalResult> {
+        let result = Contract(self.oracle.clone())
+            .call_function_raw(method, args)
+            .transaction()
+            .deposit(deposit)
+            .gas(NearGas::from_tgas(300))
+            .with_signer(signer_id.clone(), self.signer.clone())
+            .send_to(&self.network)
+            .await?;
+        match result {
+            TransactionResult::Full(result) => Ok(*result),
+            TransactionResult::Pending { status } => {
+                Err(format!("transaction still pending: {status:?}").into())
+            }
+        }
+    }
+
     /// Creates `<name>.sandbox` and deploys `wasm` to it, calling `init` with
     /// `init_args` if given.
     pub async fn deploy(
