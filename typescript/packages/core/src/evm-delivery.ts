@@ -58,6 +58,8 @@ export async function fetchEvmDelivery(
     const body = (await response.json()) as { result?: Hex; error?: { message?: string } };
     if (body.error || !body.result)
       throw new Error(`eth_call: ${body.error?.message ?? "no result"}`);
+    // A call to an address without code succeeds with no data.
+    if (body.result === "0x") throw new Error(`No Receiver contract at ${receiver}`);
     return body.result;
   };
 

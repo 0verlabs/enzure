@@ -111,7 +111,7 @@ export function NearHookDetail({
 /** The Receiver's record of an EVM Hook, re-read until it is delivered. Null on chains the app doesn't read. */
 function useEvmDelivery(step: EvmHookStep, assertionId: number) {
   const [delivery, setDelivery] = useState<EvmDelivery | null>(null);
-  const [failed, setFailed] = useState(false);
+  const [failed, setFailed] = useState<string | null>(null);
   const readable = step.chainId === config.evm.chainId && step.status === "signed";
 
   useEffect(() => {
@@ -125,15 +125,18 @@ function useEvmDelivery(step: EvmHookStep, assertionId: number) {
       )
         .then((found) => {
           if (cancelled) return;
-          setFailed(false);
+          setFailed(null);
           setDelivery(found);
           if (!found.delivered || !found.transactionHash)
             timer = setTimeout(read, DELIVERY_REFRESH_MS);
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           if (cancelled) return;
-          setFailed(true);
-          timer = setTimeout(read, DELIVERY_REFRESH_MS);
+          const message = error instanceof Error ? error.message : String(error);
+          setFailed(message);
+          // A Receiver address without a contract won't change; anything else may be a passing RPC error.
+          if (!message.startsWith("No Receiver contract"))
+            timer = setTimeout(read, DELIVERY_REFRESH_MS);
         });
     void read();
     return () => {
@@ -223,7 +226,9 @@ export function EvmHookDetail({
         </span>
       ) : null}
       {readable && failed ? (
-        <span>Couldn&apos;t read the Receiver on {chain} right now.</span>
+        <span>
+          Couldn&apos;t read the Receiver on {chain}: {failed}
+        </span>
       ) : null}
       {step.status === "unsigned" ? (
         <span className="flex flex-wrap items-center gap-3">

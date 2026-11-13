@@ -67,7 +67,7 @@ export function DaoRulingDetail({
         ) : null}
       </span>
       {proposalId !== null ? (
-        <span className="flex flex-wrap items-center gap-2">
+        <span>
           Proposal {proposalId}
           {proposal ? (
             <>

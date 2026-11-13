@@ -91,6 +91,22 @@ test("an EVM Hook the Receiver hasn't recorded is not delivered and has no deliv
   expect(chain.logQueries).toEqual([]);
 });
 
+test("a Receiver address with no contract is reported as such", async () => {
+  const fetch = (async (_url: string | URL | Request, init?: RequestInit) =>
+    Response.json({
+      jsonrpc: "2.0",
+      id: JSON.parse(init!.body as string).id,
+      result: "0x",
+    })) as typeof globalThis.fetch;
+
+  await expect(
+    fetchEvmDelivery(
+      { rpcUrl: "https://rpc.example", fetch },
+      { receiver: RECEIVER, consumer: CONSUMER, assertionId: 7 },
+    ),
+  ).rejects.toThrow(`No Receiver contract at ${RECEIVER}`);
+});
+
 test("without a logs API the delivery is still read, with no transaction", async () => {
   const chain = fakeChain({ delivered: true, recorded: true });
 
