@@ -76,4 +76,14 @@ _Avoid_: Verifier, bridge, gateway
 
 **Relayer**:
 Anyone who carries a signed result from NEAR to a Receiver and pays the gas for it.
-_Avoid_: Keeper, bot, messenger
+_Avoid_: bot, messenger
+
+### Operations
+
+**Scheduler**:
+Anyone who calls the oracle's permissionless methods as soon as they become callable: `settle` when a timer ends, `check_timeout` when the AI Verdict deadline passes, and the calls that start Hook delivery. It decides nothing; the oracle checks every call.
+_Avoid_: Cron, settler, bot
+
+**Keeper service**:
+The long-lived process Enzure runs that acts as Resolver, Scheduler and Relayer against one oracle. It holds no special rights: any of its calls could be made by anyone else.
+_Avoid_: Keeper (alone, for a Relayer or Resolver), bot, daemon, backend
