@@ -28,36 +28,56 @@ const relayerSecrets = Object.fromEntries(
     ]),
 );
 
-export default defineConfig({
-  worker: {
-    name: "enzure-keeper",
-    compatibilityDate: "2026-11-13",
-    compatibilityFlags: ["nodejs_compat"],
-    entrypoint,
-    // No public URL: the Keeper runs on its alarm and cron trigger only.
-    workersDev: false,
-    observability: {
-      enabled: true,
-      logs: { enabled: true, invocationLogs: true },
-      traces: { enabled: true },
+// `--mode mainnet` selects the mainnet Worker. `--mode testnet` and the modes
+// cf and Vite pick on their own (development, production, test, none) select
+// testnet, so mainnet is never deployed by accident.
+const networkOf = (mode: string | undefined): "testnet" | "mainnet" => {
+  if (mode === "mainnet") return "mainnet";
+  if (mode === undefined || ["testnet", "development", "production", "test"].includes(mode)) {
+    return "testnet";
+  }
+  throw new Error(`Unknown mode "${mode}": use --mode testnet or --mode mainnet`);
+};
+
+export default defineConfig(({ mode }) => {
+  const network = networkOf(mode);
+  // A NEAR_NETWORK in the environment must agree with the mode, so a testnet
+  // .env can't point a mainnet Keeper at testnet, or the other way round.
+  if (process.env.NEAR_NETWORK && process.env.NEAR_NETWORK !== network) {
+    throw new Error(`NEAR_NETWORK is ${process.env.NEAR_NETWORK}, but this is a ${network} build`);
+  }
+  return {
+    worker: {
+      // Testnet keeps the original name.
+      name: network === "mainnet" ? "enzure-keeper-mainnet" : "enzure-keeper",
+      compatibilityDate: "2026-11-13",
+      compatibilityFlags: ["nodejs_compat"],
+      entrypoint,
+      // No public URL: the Keeper runs on its alarm and cron trigger only.
+      workersDev: false,
+      observability: {
+        enabled: true,
+        logs: { enabled: true, invocationLogs: true },
+        traces: { enabled: true },
+      },
+      exports: {
+        Keeper: exports.durableObject({ storage: "sqlite" }),
+      },
+      // Restarts the alarm loop if it isn't running (src/worker.ts).
+      triggers: [triggers.scheduled({ schedule: "* * * * *" })],
+      env: {
+        ORACLE_ACCOUNT_ID: setting("ORACLE_ACCOUNT_ID"),
+        NEAR_ACCOUNT_ID: setting("NEAR_ACCOUNT_ID"),
+        NEAR_NETWORK: bindings.text(network),
+        NEAR_AI_URL: setting("NEAR_AI_URL"),
+        STORAGE_URL: setting("STORAGE_URL"),
+        POLL_INTERVAL_MS: setting("POLL_INTERVAL_MS"),
+        NEAR_PRIVATE_KEY: bindings.secret(),
+        NEARAI_API_KEY: bindings.secret(),
+        // Optional, so declared only when set at deploy time; a secret like the other RPC URLs.
+        NEAR_RPC_URL: process.env.NEAR_RPC_URL ? bindings.secret() : undefined,
+        ...relayerSecrets,
+      },
     },
-    exports: {
-      Keeper: exports.durableObject({ storage: "sqlite" }),
-    },
-    // Restarts the alarm loop if it isn't running (src/worker.ts).
-    triggers: [triggers.scheduled({ schedule: "* * * * *" })],
-    env: {
-      ORACLE_ACCOUNT_ID: setting("ORACLE_ACCOUNT_ID"),
-      NEAR_ACCOUNT_ID: setting("NEAR_ACCOUNT_ID"),
-      NEAR_NETWORK: setting("NEAR_NETWORK"),
-      NEAR_AI_URL: setting("NEAR_AI_URL"),
-      STORAGE_URL: setting("STORAGE_URL"),
-      POLL_INTERVAL_MS: setting("POLL_INTERVAL_MS"),
-      NEAR_PRIVATE_KEY: bindings.secret(),
-      NEARAI_API_KEY: bindings.secret(),
-      // Optional, so declared only when set at deploy time; a secret like the other RPC URLs.
-      NEAR_RPC_URL: process.env.NEAR_RPC_URL ? bindings.secret() : undefined,
-      ...relayerSecrets,
-    },
-  },
+  };
 });

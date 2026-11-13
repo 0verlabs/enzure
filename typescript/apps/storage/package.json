@@ -10,6 +10,8 @@
     "dev": "cf dev",
     "build": "cf build",
     "deploy": "cf deploy",
+    "deploy:testnet": "cf deploy --mode testnet",
+    "deploy:mainnet": "cf deploy --mode mainnet",
     "test": "vp test"
   },
   "dependencies": {

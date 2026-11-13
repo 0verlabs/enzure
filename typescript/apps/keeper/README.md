@@ -30,13 +30,13 @@ Settings are checked with Zod when the first pass starts (`src/config.ts`). A ba
 | `NEAR_PRIVATE_KEY`                 | yes          | secret             | Its key (`ed25519:...`). A function-call key for the oracle is enough                                                          |
 | `NEARAI_API_KEY`                   | yes          | secret             | NEAR AI Cloud API key                                                                                                          |
 | `STORAGE_URL`                      | yes          | setting            | Storage service, e.g. `https://enzure-storage.luckzivanius.workers.dev`                                                        |
-| `NEAR_NETWORK`                     | no           | setting            | `testnet` (default) or `mainnet`                                                                                               |
+| `NEAR_NETWORK`                     | no           | setting            | Set from the deploy's network (`--mode`); a different value in the environment stops the deploy                                |
 | `NEAR_RPC_URL`                     | no           | secret             | Another NEAR RPC endpoint                                                                                                      |
 | `NEAR_AI_URL`                      | no           | setting            | Defaults to `https://cloud-api.near.ai/v1`                                                                                     |
 | `POLL_INTERVAL_MS`                 | no           | setting            | Default 15000, at least 1000                                                                                                   |
 | `BASE_RPC_URL`, `BASE_RELAYER_KEY` | no, together | secrets            | Turn the Base Relayer on. The RPC may serve Base (8453) or Base Sepolia (84532); the key (`0x` + 64 hex) pays that chain's gas |
 
-Settings are plain-text bindings, taken from the environment when `cloudflare.config.ts` is evaluated, so `scripts/deploy-keeper.sh` reads them from the root `.env`. Secrets are uploaded with each deploy. RPC URLs are secrets because provider URLs often carry an API key. A deploy doesn't delete secrets uploaded before, so to turn a Relayer chain off, delete its pair, e.g. `npx wrangler secret delete BASE_RELAYER_KEY --name enzure-keeper` and the same for `BASE_RPC_URL`.
+Settings are plain-text bindings, taken from the environment when `cloudflare.config.ts` is evaluated, so `scripts/deploy-keeper.sh` reads them from the root env files. Secrets are uploaded with each deploy. RPC URLs are secrets because provider URLs often carry an API key. A deploy doesn't delete secrets uploaded before, so to turn a Relayer chain off, delete its pair, e.g. `npx wrangler secret delete BASE_RELAYER_KEY --name enzure-keeper` and the same for `BASE_RPC_URL`.
 
 ## Relayer chains
 
@@ -89,10 +89,11 @@ The whole service is checked end to end on testnet by `scripts/keeper-dispute.sh
 ## Deploy
 
 ```bash
-./scripts/deploy-keeper.sh             # from the repository root; --dry-run builds and checks without uploading
+./scripts/deploy-keeper.sh             # from the repository root; testnet, as enzure-keeper. --dry-run builds and checks without uploading
+./scripts/deploy-keeper.sh mainnet     # mainnet, as enzure-keeper-mainnet
 ```
 
-It reads the variables above and `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` from the environment or the root `.env`, uploads the secrets with the new version, and the cron trigger starts the loop within a minute. Follow the logs with `npx wrangler tail enzure-keeper` or in Workers Logs. The token needs Workers Scripts edit permission.
+It reads the variables above and `CLOUDFLARE_API_TOKEN` / `CLOUDFLARE_ACCOUNT_ID` from the environment or the network's env files (testnet: `.env.testnet`, then `.env`; mainnet: `.env.mainnet`, with only the Cloudflare credentials falling back to `.env`), uploads the secrets with the new version, and the cron trigger starts the loop within a minute. Follow the logs with `npx wrangler tail enzure-keeper` (or `enzure-keeper-mainnet`) or in Workers Logs. The token needs Workers Scripts edit permission.
 
 Not deployed yet. A dry run with placeholder values builds, binds the settings and the Base secrets, and passes `cf deploy`'s checks.
 
