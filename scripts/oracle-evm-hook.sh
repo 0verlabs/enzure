@@ -10,6 +10,8 @@
 #   NEAR_ACCOUNT_ID    the Asserter, and parent of the development account
 #   NEAR_PRIVATE_KEY   a full-access key of NEAR_ACCOUNT_ID (ed25519:...)
 # Optional:
+#   ORACLE_ACCOUNT_ID      reuse this deployed oracle instead of deploying a new one,
+#                          e.g. one a Receiver is already configured for
 #   ORACLE_DAO_ACCOUNT_ID  DAO the oracle is initialised with (NEAR_ACCOUNT_ID)
 #   EVM_SIGNER             Chain Signatures signer (v1.signer-prod.testnet)
 #   EVM_CHAIN_ID           chain id of the EVM Hook (84532, Base Sepolia)
@@ -54,7 +56,7 @@ sign_deposit="${SIGN_DEPOSIT:-1 yoctoNEAR}"
 liveness="${LIVENESS_SECS:-60}"
 bond="${BOND_YOCTO:-1000000000000000000000000}"
 oracle_balance="${ORACLE_BALANCE:-3 NEAR}"
-oracle="oracle-$(date +%s).$NEAR_ACCOUNT_ID"
+oracle="${ORACLE_ACCOUNT_ID:-oracle-$(date +%s).$NEAR_ACCOUNT_ID}"
 
 near_keys_init
 asserter_key="$(near_key_file "$NEAR_ACCOUNT_ID")"
@@ -115,20 +117,24 @@ json_field() {
 links=()
 last_output=""
 
-step "Building the oracle"
-(cd "$root/contracts/near/oracle" && cargo near build non-reproducible-wasm --locked >&2)
-wasm="$root/contracts/near/target/near/oracle/oracle.wasm"
+if [ -n "${ORACLE_ACCOUNT_ID:-}" ]; then
+  step "Using the deployed oracle $oracle"
+else
+  step "Building the oracle"
+  (cd "$root/contracts/near/oracle" && cargo near build non-reproducible-wasm --locked >&2)
+  wasm="$root/contracts/near/target/near/oracle/oracle.wasm"
 
-step "Creating the development account $oracle"
-send "create development account" account create-account fund-myself "$oracle" "$oracle_balance" \
-  use-manually-provided-public-key "$NEAR_PUBLIC_KEY" sign-as "$NEAR_ACCOUNT_ID" \
-  network-config "$NEAR_NETWORK" sign-with-access-key-file "$asserter_key" send
+  step "Creating the development account $oracle"
+  send "create development account" account create-account fund-myself "$oracle" "$oracle_balance" \
+    use-manually-provided-public-key "$NEAR_PUBLIC_KEY" sign-as "$NEAR_ACCOUNT_ID" \
+    network-config "$NEAR_NETWORK" sign-with-access-key-file "$asserter_key" send
 
-step "Deploying the oracle with $dao as its DAO and $evm_signer as its signer"
-send "deploy" contract deploy "$oracle" use-file "$wasm" with-init-call new \
-  json-args "{\"dao\":\"$dao\",\"evm_signer\":\"$evm_signer\"}" \
-  prepaid-gas '100 Tgas' attached-deposit '0 NEAR' network-config "$NEAR_NETWORK" \
-  sign-with-access-key-file "$oracle_key" send
+  step "Deploying the oracle with $dao as its DAO and $evm_signer as its signer"
+  send "deploy" contract deploy "$oracle" use-file "$wasm" with-init-call new \
+    json-args "{\"dao\":\"$dao\",\"evm_signer\":\"$evm_signer\"}" \
+    prepaid-gas '100 Tgas' attached-deposit '0 NEAR' network-config "$NEAR_NETWORK" \
+    sign-with-access-key-file "$oracle_key" send
+fi
 
 step "Posting an Assertion with an EVM Hook for chain $chain_id"
 claim="Enzure testnet run on $(date -u +%Y-%m-%dT%H:%M:%SZ): this Assertion's EVM Hook is signed with Chain Signatures."

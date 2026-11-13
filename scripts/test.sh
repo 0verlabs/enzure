@@ -40,6 +40,9 @@ step "NEAR contracts: unit and sandbox tests"
 step "EVM contracts: Foundry tests"
 (cd contracts/evm && forge test)
 
+step "Example EVM Consumer: Foundry tests"
+(cd examples/evm-consumer && forge test)
+
 step "TypeScript: install, check and test"
 (cd typescript && vp install --frozen-lockfile && vp check && vp test)
 

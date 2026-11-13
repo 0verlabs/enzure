@@ -22,6 +22,11 @@ contracts/evm/out/
 contracts/evm/cache/
 contracts/evm/broadcast/*/31337/
 contracts/evm/broadcast/**/dry-run/
+contracts/evm/deployments/31337.json
+examples/evm-consumer/out/
+examples/evm-consumer/cache/
+examples/evm-consumer/broadcast/*/31337/
+examples/evm-consumer/broadcast/**/dry-run/
 
 # Cloudflare local state and generated types
 .cloudflare/
