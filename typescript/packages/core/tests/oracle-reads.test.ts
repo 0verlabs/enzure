@@ -27,7 +27,7 @@ type Call = { url: string; init?: RequestInit };
 function fakeFetch(respond: (call: Call) => Response) {
   const calls: Call[] = [];
   const fetch = async (url: string | URL | Request, init?: RequestInit) => {
-    const call = { url: String(url), init };
+    const call = { url: url instanceof Request ? url.url : url.toString(), init };
     calls.push(call);
     return respond(call);
   };
