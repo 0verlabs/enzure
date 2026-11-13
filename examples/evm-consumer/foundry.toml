@@ -1,0 +1,14 @@
+[profile.default]
+src = "src"
+out = "out"
+script = "script"
+test = "test"
+# Shares forge-std and the Receiver with the production EVM project.
+libs = ["../../contracts/evm/lib"]
+allow_paths = ["../../contracts/evm"]
+remappings = [
+    "forge-std/=../../contracts/evm/lib/forge-std/src/",
+    "enzure/=../../contracts/evm/src/",
+]
+solc_version = "0.8.30"
+fs_permissions = [{ access = "read", path = "../../fixtures" }]
