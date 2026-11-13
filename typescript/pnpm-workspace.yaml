@@ -5,10 +5,16 @@ packages:
 catalogMode: prefer
 
 catalog:
+  "@cloudflare/vite-plugin": 2.0.0-beta.v.15
+  "@cloudflare/vitest-plugin": 1.8.0
+  "@hono/zod-validator": ^0.9.1
   "@types/node": ^26.6.5
+  cf: 1.0.0-beta.30
+  hono: ^4.13.18
   typescript: ^7.0.2
   vite: npm:@voidzero-dev/vite-plus-core@1.6.0
   vite-plus: 1.6.0
+  zod: ^4.6.7
 overrides:
   vite@*: "catalog:"
 peerDependencyRules:
@@ -16,3 +22,6 @@ peerDependencyRules:
     - vite
   allowedVersions:
     vite: "*"
+allowBuilds:
+  esbuild: true
+  workerd: true

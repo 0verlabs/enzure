@@ -20,3 +20,10 @@ export {
   type SignedResponse,
 } from "./signature.ts";
 export { parseVerdict } from "./verdict.ts";
+export {
+  checkContent,
+  contentHash,
+  isContentHash,
+  MAX_CONTENT_BYTES,
+  type ContentCheck,
+} from "./content.ts";

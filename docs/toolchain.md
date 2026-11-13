@@ -10,10 +10,12 @@ Run every test suite from the repository root with `./scripts/test.sh`. It needs
 | Rust | 1.95.0 with `wasm32-unknown-unknown` | `contracts/near/rust-toolchain.toml`; rustup installs it | [rustup.rs](https://rustup.rs) |
 | near-sdk | 5.30.1 | `contracts/near/Cargo.toml` and `Cargo.lock` | Cargo |
 | cargo-near | 0.23.0 | Documented here; the tests build Wasm through the `cargo-near-build` crate, pinned in `Cargo.lock` | `cargo install --locked cargo-near@0.23.0` |
+| near-cli-rs (`near`) | 0.31.1 | Documented here; used by the NEAR scripts in `scripts/` | [near-cli-rs releases](https://github.com/near/near-cli-rs/releases) |
 | Reproducible Wasm build | cargo-near 0.23.0 with Rust 1.99.1 in Docker | `[package.metadata.near.reproducible_build]` in `contracts/near/oracle/Cargo.toml`, by image digest | `cargo near build reproducible-wasm` (needs Docker) |
 | Foundry | 1.7.1 | Documented here; `scripts/test.sh` warns on a different version | `foundryup --install 1.7.1` |
 | solc | 0.8.30 | `contracts/evm/foundry.toml`; Foundry downloads it | Managed by Foundry |
 | forge-std | v1.17.0 | Git submodule at `contracts/evm/lib/forge-std` and `foundry.lock` | `git submodule update --init` |
+| Cloudflare CLI (`cf`) | 1.0.0-beta.30, with `@cloudflare/vite-plugin` 2.0.0-beta.v.15 and `@cloudflare/vitest-plugin` 1.8.0 | `typescript/pnpm-workspace.yaml` catalog | `vp install`; run it with `vp exec cf` in an app folder |
 
 Run Vite+ commands through `vp`, not a global `pnpm`: `vp install`, `vp check`, `vp test`.
 

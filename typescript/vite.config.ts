@@ -10,4 +10,8 @@ export default defineConfig({
   run: {
     cache: true,
   },
+  test: {
+    // Each package runs its tests with its own vite.config.ts.
+    projects: ["apps/*", "packages/*"],
+  },
 });
