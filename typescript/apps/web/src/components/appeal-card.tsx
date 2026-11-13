@@ -33,7 +33,7 @@ export function AppealCard({
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Appeal</CardTitle>
+        <CardTitle>Appeal to the DAO</CardTitle>
         <CardDescription>
           The AI Verdict went against you ({verdict}). Appeal it to the DAO within{" "}
           <Countdown endsAtNs={assertion.appeal_window_ends_at_ns!} /> with an appeal bond of{" "}
@@ -48,8 +48,14 @@ export function AppealCard({
             Appealed in <TxLink hash={sent.hash} />
           </p>
         ) : null}
-        <div>
-          <Button variant="destructive" disabled={pending} onClick={appeal}>
+        <div className="flex flex-col">
+          <Button
+            variant="destructive"
+            size="lg"
+            className="h-10"
+            disabled={pending}
+            onClick={appeal}
+          >
             {pending ? <Spinner data-icon="inline-start" /> : null}
             {pending ? "Confirm in your wallet…" : `Appeal with ${formatNear(assertion.bond)}`}
           </Button>
