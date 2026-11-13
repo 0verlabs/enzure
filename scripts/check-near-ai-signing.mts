@@ -14,6 +14,7 @@ import { mkdir, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { parseArgs } from "node:util";
 import {
+  NEAR_AI_URL,
   PROMPT_TEMPLATE_V1,
   buildAiRequest,
   checkAttestedSigner,
@@ -24,7 +25,6 @@ import {
   type ResponseSignature,
 } from "../typescript/packages/core/src/index.ts";
 
-const API = "https://cloud-api.near.ai/v1";
 const SIGNATURE_TIMEOUT_MS = 30_000;
 const FIXTURE = join(import.meta.dirname, "..", "fixtures", "near-ai-cloud", "signed-response.json");
 
@@ -52,7 +52,7 @@ const input: AiRequestInput = {
 
 // 1. Preflight: fetch the model's attestation with a fresh nonce.
 const nonce = randomBytes(32).toString("hex");
-const attestationUrl = new URL(`${API}/attestation/report`);
+const attestationUrl = new URL(`${NEAR_AI_URL}/attestation/report`);
 attestationUrl.search = new URLSearchParams({
   model: template.modelId,
   provider: "near",
@@ -77,7 +77,7 @@ const [attestedKey] = attestedKeys as [string];
 
 // 2. Send the request and keep the exact bytes both ways.
 const requestBody = buildAiRequest(template, input);
-const completion = await fetch(`${API}/chat/completions`, {
+const completion = await fetch(`${NEAR_AI_URL}/chat/completions`, {
   method: "POST",
   body: requestBody,
   headers: {
@@ -208,7 +208,7 @@ if (args["write-fixture"]) {
 }
 
 async function fetchSignature(id: string): Promise<ResponseSignature> {
-  const url = `${API}/signature/${encodeURIComponent(id)}?signing_algo=ed25519`;
+  const url = `${NEAR_AI_URL}/signature/${encodeURIComponent(id)}?signing_algo=ed25519`;
   const deadline = Date.now() + SIGNATURE_TIMEOUT_MS;
   let last = "";
   while (Date.now() < deadline) {
