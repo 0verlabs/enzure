@@ -392,6 +392,90 @@ test("content whose bytes don't hash to the on-chain hash is marked as not match
   ).resolves.toEqual({ status: "mismatch", text: "tampered" });
 });
 
+test("a settled Assertion's timeline ends with each Hook's delivery, by its index", () => {
+  const settled: OracleAssertion = {
+    ...posted,
+    state: "settled",
+    outcome: true,
+    settled_at_ns: "1100000000000",
+    hooks: [
+      { near: { consumer: "consumer.testnet", gas: "30000000000000", status: "failed" } },
+      {
+        evm: {
+          chain_id: 84532,
+          receiver: "0x1000000000000000000000000000000000000001",
+          consumer: "0x2000000000000000000000000000000000000002",
+          status: "signed",
+        },
+      },
+      { near: { consumer: "other.testnet", gas: "30000000000000", status: "delivering" } },
+    ],
+  };
+
+  expect(assertionTimeline(settled, 1_200_000_000_000n).slice(3)).toEqual([
+    {
+      kind: "near_hook",
+      hookIndex: 0,
+      consumer: "consumer.testnet",
+      status: "failed",
+      event: "near_hook_failed",
+    },
+    {
+      kind: "evm_hook",
+      hookIndex: 1,
+      chainId: 84532,
+      receiver: "0x1000000000000000000000000000000000000001",
+      consumer: "0x2000000000000000000000000000000000000002",
+      status: "signed",
+      event: "evm_hook_signed",
+    },
+    { kind: "near_hook", hookIndex: 2, consumer: "other.testnet", status: "delivering" },
+  ]);
+  expect(assertionTimeline({ ...settled, state: "asserted" }, 1_000_000_000_000n)).toHaveLength(2);
+});
+
+test("a Hook step gets the latest transaction of its event for that Hook", () => {
+  const event = (name: string, hookIndex: number, hash: string): OracleEvent => ({
+    event: name,
+    data: { assertion_id: 1, hook_index: hookIndex },
+    transactionHash: hash,
+    blockHeight: 1,
+  });
+  const events = [
+    event("near_hook_failed", 1, "tx-other-hook"),
+    event("near_hook_failed", 0, "tx-first-failure"),
+    event("near_hook_failed", 0, "tx-retry-failure"),
+    event("evm_hook_signed", 2, "tx-signed"),
+  ];
+
+  expect(
+    timelineTransactions(
+      [
+        { kind: "near_hook", hookIndex: 0, consumer: "c", status: "failed", event: "near_hook_failed" },
+        {
+          kind: "evm_hook",
+          hookIndex: 2,
+          chainId: 84532,
+          receiver: "0x",
+          consumer: "0x",
+          status: "signed",
+          event: "evm_hook_signed",
+        },
+        {
+          kind: "evm_hook",
+          hookIndex: 3,
+          chainId: 84532,
+          receiver: "0x",
+          consumer: "0x",
+          status: "unsigned",
+          event: "evm_hook_signed",
+        },
+      ],
+      events,
+    ),
+  ).toEqual(["tx-retry-failure", "tx-signed", null]);
+});
+
 test("each timeline step that an event records gets that event's transaction", () => {
   const event = (name: string, hash: string): OracleEvent => ({
     event: name,

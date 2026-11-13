@@ -1,4 +1,7 @@
-import type { AssertionView, OracleView } from "./relayer.ts";
+import type { AssertionView, EvmHookView, OracleView } from "./relayer.ts";
+
+/** Where a NEAR Hook's delivery stands: `pending` until settlement, `delivering` while the call runs. */
+export type NearHookStatus = "pending" | "delivering" | "delivered" | "failed";
 
 /**
  * Reading the oracle: its views over NEAR JSON-RPC, an Assertion's timeline,
@@ -138,7 +141,25 @@ export type TimelineStep =
   /** The DAO's deadline to rule, shown while it runs and when it passed without a ruling. */
   | { kind: "dao_deadline"; endsAtNs: string; open: boolean }
   | { kind: "dao_ruling"; atNs: string; event: "appeal_resolved"; outcome: boolean }
-  | { kind: "settled"; atNs: string; event: "assertion_settled"; outcome: boolean };
+  | { kind: "settled"; atNs: string; event: "assertion_settled"; outcome: boolean }
+  /** A NEAR Hook of a settled Assertion; `event` is set once its delivery succeeded or failed. */
+  | {
+      kind: "near_hook";
+      hookIndex: number;
+      consumer: string;
+      status: NearHookStatus;
+      event?: "near_hook_delivered" | "near_hook_failed";
+    }
+  /** An EVM Hook of a settled Assertion; its `evm_hook_signed` event is the signing transaction. */
+  | {
+      kind: "evm_hook";
+      hookIndex: number;
+      chainId: number;
+      receiver: string;
+      consumer: string;
+      status: EvmHookView["status"];
+      event: "evm_hook_signed";
+    };
 
 /**
  * The steps an Assertion has gone through, oldest first, as of `nowNs`:
@@ -223,6 +244,29 @@ export function assertionTimeline(assertion: OracleAssertion, nowNs: bigint): Ti
       event: "assertion_settled",
       outcome: assertion.outcome,
     });
+    (assertion.hooks ?? []).forEach((hook, hookIndex) => {
+      if ("near" in hook) {
+        const { consumer, status } = hook.near;
+        const event =
+          status === "delivered"
+            ? "near_hook_delivered"
+            : status === "failed"
+              ? "near_hook_failed"
+              : undefined;
+        steps.push({ kind: "near_hook", hookIndex, consumer, status, ...(event ? { event } : {}) });
+      } else {
+        const { chain_id: chainId, receiver, consumer, status } = hook.evm;
+        steps.push({
+          kind: "evm_hook",
+          hookIndex,
+          chainId,
+          receiver,
+          consumer,
+          status,
+          event: "evm_hook_signed",
+        });
+      }
+    });
   }
   return steps;
 }
@@ -258,13 +302,36 @@ export function canAppeal(
 
 /** A transaction as the FastNEAR transactions API returns it; only the fields read here. */
 export interface ExplorerTransaction {
-  transaction: { hash: string; signer_id: string; receiver_id: string };
+  transaction: {
+    hash: string;
+    signer_id: string;
+    receiver_id: string;
+    /** `{ FunctionCall: { method_name, args (base64) } }`, other action objects, or bare names like `"CreateAccount"`. */
+    actions?: ReadonlyArray<ExplorerAction | string>;
+  };
   receipts: Array<{
     execution_outcome: {
       block_height: number;
-      outcome: { executor_id: string; logs: string[] };
+      outcome: {
+        executor_id: string;
+        logs: string[];
+        /** `{ SuccessValue: base64 }`, `{ SuccessReceiptId }` or `{ Failure }`. */
+        status?: Record<string, unknown>;
+      };
     };
   }>;
+}
+
+export type ExplorerAction = { FunctionCall?: { method_name: string; args: string } } & Record<
+  string,
+  unknown
+>;
+
+/** The first function call a transaction makes, with its arguments parsed as JSON (null if they aren't). */
+export interface TransactionCall {
+  receiverId: string;
+  methodName: string;
+  args: unknown;
 }
 
 /** An oracle event (NEP-297, standard `enzure`) and the transaction that emitted it. */
@@ -274,6 +341,8 @@ export interface OracleEvent {
   transactionHash: string;
   /** Height of the block whose receipt logged it. */
   blockHeight: number;
+  /** What the transaction called first: the oracle itself, or e.g. the DAO's `act_proposal`. */
+  call?: TransactionCall | null;
 }
 
 const EVENT_PREFIX = "EVENT_JSON:";
@@ -309,6 +378,7 @@ export function assertionEvents(
           data: parsed.data,
           transactionHash: tx.transaction.hash,
           blockHeight,
+          call: transactionCall(tx),
         });
       }
     }
@@ -337,8 +407,84 @@ export async function fetchAssertionEvents(
   { apiUrl, contractId, fetch = globalThis.fetch }: ExplorerOptions,
   assertion: Pick<OracleAssertion, "id" | "asserted_at_ns">,
 ): Promise<OracleEvent[]> {
+  const explorer = explorerApi(apiUrl, fetch);
+  const hashes = await explorer.accountTransactionHashes(contractId, {
+    sinceNs: BigInt(assertion.asserted_at_ns) - POSTING_SLACK_NS,
+  });
+  return assertionEvents(await explorer.transactions(hashes), contractId, assertion.id);
+}
+
+/** A Sputnik DAO proposal's creation, found by `fetchProposalTransaction`. */
+export interface ProposalTransaction {
+  transactionHash: string;
+  proposer: string;
+  description: string | null;
+}
+
+/**
+ * The Sputnik DAO proposal whose approval sent `event` (normally the
+ * oracle's `appeal_resolved`): the `id` of the `act_proposal` call to `dao`
+ * that started its transaction. Null if the transaction didn't start there.
+ */
+export function daoProposalId(event: OracleEvent, dao: string): number | null {
+  const call = event.call;
+  if (!call || call.receiverId !== dao || call.methodName !== "act_proposal") return null;
+  const id = (call.args as { id?: unknown } | null)?.id;
+  return typeof id === "number" ? id : null;
+}
+
+/**
+ * The transaction that added proposal `proposalId` to the Sputnik DAO
+ * `contractId`: among the DAO's transactions from `sinceNs` up to block
+ * `maxBlockHeight`, the `add_proposal` whose DAO receipt returned that id.
+ * Null if none of them did.
+ */
+export async function fetchProposalTransaction(
+  { apiUrl, contractId: dao, fetch = globalThis.fetch }: ExplorerOptions,
+  { proposalId, sinceNs, maxBlockHeight }: { proposalId: number; sinceNs: string; maxBlockHeight: number },
+): Promise<ProposalTransaction | null> {
+  const explorer = explorerApi(apiUrl, fetch);
+  const hashes = await explorer.accountTransactionHashes(dao, {
+    sinceNs: BigInt(sinceNs),
+    maxBlockHeight,
+  });
+  const returned = bytesToBase64(utf8.encode(JSON.stringify(proposalId)));
+  for (const tx of await explorer.transactions(hashes)) {
+    const call = transactionCall(tx);
+    if (call?.receiverId !== dao || call.methodName !== "add_proposal") continue;
+    const created = tx.receipts.some(
+      ({ execution_outcome: { outcome } }) =>
+        outcome.executor_id === dao && outcome.status?.SuccessValue === returned,
+    );
+    if (!created) continue;
+    const description = (call.args as { proposal?: { description?: unknown } } | null)?.proposal
+      ?.description;
+    return {
+      transactionHash: tx.transaction.hash,
+      proposer: tx.transaction.signer_id,
+      description: typeof description === "string" ? description : null,
+    };
+  }
+  return null;
+}
+
+/** The first function call of a transaction, or null if its first action isn't one. */
+function transactionCall(tx: ExplorerTransaction): TransactionCall | null {
+  const first = tx.transaction.actions?.[0];
+  const call = typeof first === "object" ? first.FunctionCall : undefined;
+  if (!call) return null;
+  let args: unknown = null;
+  try {
+    args = JSON.parse(new TextDecoder().decode(base64ToBytes(call.args)));
+  } catch {
+    // Not JSON; leave args null.
+  }
+  return { receiverId: tx.transaction.receiver_id, methodName: call.method_name, args };
+}
+
+/** The two FastNEAR transactions API reads: an account's transactions, then the transactions themselves. */
+function explorerApi(apiUrl: string, fetch: typeof globalThis.fetch) {
   const base = apiUrl.replace(/\/$/, "");
-  const since = BigInt(assertion.asserted_at_ns) - POSTING_SLACK_NS;
   const post = async <T>(path: string, body: unknown): Promise<T> => {
     const response = await fetch(`${base}${path}`, {
       method: "POST",
@@ -348,38 +494,46 @@ export async function fetchAssertionEvents(
     if (!response.ok) throw new Error(`${path}: HTTP ${response.status}`);
     return (await response.json()) as T;
   };
-
-  // The account's transactions come newest first, a page at a time.
-  const hashes: string[] = [];
-  for (let maxBlockHeight: number | undefined; ;) {
-    const page = await post<{
-      account_txs: Array<{
-        transaction_hash: string;
-        tx_block_height: number;
-        tx_block_timestamp: string;
-      }>;
-    }>("/v0/account", {
-      account_id: contractId,
-      ...(maxBlockHeight === undefined ? {} : { max_block_height: maxBlockHeight }),
-    });
-    const recent = page.account_txs.filter((tx) => BigInt(tx.tx_block_timestamp) >= since);
-    const fresh = recent.filter((tx) => !hashes.includes(tx.transaction_hash));
-    hashes.push(...fresh.map((tx) => tx.transaction_hash));
-    const last = page.account_txs.at(-1);
-    // Stop at the first page that reaches back before the posting, or adds nothing new.
-    if (!last || fresh.length === 0 || recent.length < page.account_txs.length) break;
-    maxBlockHeight = last.tx_block_height - 1;
-  }
-
-  const transactions: ExplorerTransaction[] = [];
-  for (let i = 0; i < hashes.length; i += TRANSACTIONS_PER_REQUEST) {
-    const { transactions: batch } = await post<{ transactions: ExplorerTransaction[] }>(
-      "/v0/transactions",
-      { tx_hashes: hashes.slice(i, i + TRANSACTIONS_PER_REQUEST) },
-    );
-    transactions.push(...batch);
-  }
-  return assertionEvents(transactions, contractId, assertion.id);
+  return {
+    /** The hashes of the account's transactions since `sinceNs`, up to block `maxBlockHeight` if given. */
+    async accountTransactionHashes(
+      accountId: string,
+      { sinceNs, maxBlockHeight: until }: { sinceNs: bigint; maxBlockHeight?: number },
+    ): Promise<string[]> {
+      // The account's transactions come newest first, a page at a time.
+      const hashes: string[] = [];
+      for (let maxBlockHeight = until; ;) {
+        const page = await post<{
+          account_txs: Array<{
+            transaction_hash: string;
+            tx_block_height: number;
+            tx_block_timestamp: string;
+          }>;
+        }>("/v0/account", {
+          account_id: accountId,
+          ...(maxBlockHeight === undefined ? {} : { max_block_height: maxBlockHeight }),
+        });
+        const recent = page.account_txs.filter((tx) => BigInt(tx.tx_block_timestamp) >= sinceNs);
+        const fresh = recent.filter((tx) => !hashes.includes(tx.transaction_hash));
+        hashes.push(...fresh.map((tx) => tx.transaction_hash));
+        const last = page.account_txs.at(-1);
+        // Stop at the first page that reaches back before `sinceNs`, or adds nothing new.
+        if (!last || fresh.length === 0 || recent.length < page.account_txs.length) return hashes;
+        maxBlockHeight = last.tx_block_height - 1;
+      }
+    },
+    async transactions(hashes: readonly string[]): Promise<ExplorerTransaction[]> {
+      const transactions: ExplorerTransaction[] = [];
+      for (let i = 0; i < hashes.length; i += TRANSACTIONS_PER_REQUEST) {
+        const { transactions: batch } = await post<{ transactions: ExplorerTransaction[] }>(
+          "/v0/transactions",
+          { tx_hashes: hashes.slice(i, i + TRANSACTIONS_PER_REQUEST) },
+        );
+        transactions.push(...batch);
+      }
+      return transactions;
+    },
+  };
 }
 
 const utf8 = new TextEncoder();
@@ -390,19 +544,32 @@ function bytesToBase64(bytes: Uint8Array): string {
   return btoa(binary);
 }
 
+function base64ToBytes(base64: string): Uint8Array {
+  return Uint8Array.from(atob(base64), (char) => char.charCodeAt(0));
+}
+
 /**
  * The transaction hash behind each timeline step, or null for timers and for
  * steps whose event isn't in `events` (yet). A step's event is the n-th event
  * of its name, where n is the step's `index` (0 if it has none), so the second
- * AI Verdict gets the second `ai_verdict_accepted`.
+ * AI Verdict gets the second `ai_verdict_accepted`. A Hook step gets the
+ * latest event of its name for its `hookIndex`, so a retried NEAR Hook links
+ * its last attempt.
  */
 export function timelineTransactions(
   steps: readonly TimelineStep[],
   events: readonly OracleEvent[],
 ): (string | null)[] {
   return steps.map((step) => {
-    if (!("event" in step)) return null;
+    if (!("event" in step) || !step.event) return null;
+    const named = events.filter((event) => event.event === step.event);
+    if ("hookIndex" in step) {
+      return (
+        named.filter((event) => event.data.hook_index === step.hookIndex).at(-1)
+          ?.transactionHash ?? null
+      );
+    }
     const index = "index" in step ? step.index : 0;
-    return events.filter((event) => event.event === step.event)[index]?.transactionHash ?? null;
+    return named[index]?.transactionHash ?? null;
   });
 }
