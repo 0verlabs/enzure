@@ -6,8 +6,10 @@ import {
   checkSignedResult,
   evmHooksToRelay,
   evmHooksToSign,
+  relayOnce,
   relaySignedResult,
   type HookView,
+  type OracleView,
   type SignedResultView,
 } from "../src/index.ts";
 import { chainSignatures as fixture } from "./fixture.ts";
@@ -223,4 +225,64 @@ test("the Relayer sends nothing for a result its Receiver would reject", async (
   });
 
   expect([...otherOracle.sent, ...otherChain.sent]).toHaveLength(0);
+});
+
+/** A fake oracle answering `list_assertions` and `get_signed_result` from fixed data. */
+function fakeOracle(
+  assertions: ReturnType<typeof assertion>[],
+  signedResults: Record<string, SignedResultView>,
+) {
+  const calls: { method: string; args: Record<string, unknown> }[] = [];
+  const view: OracleView = async (method, args) => {
+    calls.push({ method, args });
+    if (method === "list_assertions") {
+      const before = (args.before_id as number | undefined) ?? Infinity;
+      const limit = args.limit as number;
+      return assertions.filter((a) => a.id < before).slice(0, limit) as never;
+    }
+    if (method === "get_signed_result") {
+      return (signedResults[`${String(args.assertion_id)}/${String(args.hook_index)}`] ??
+        null) as never;
+    }
+    throw new Error(`unexpected view ${method}`);
+  };
+  return { view, calls };
+}
+
+test("one Relayer pass delivers every signed EVM Hook for its chain", async () => {
+  const oracle = fakeOracle(
+    [
+      assertion(2, "settled", [evmHook("unsigned"), evmHook("signed", 1)]),
+      assertion(1, "settled", [nearHook, evmHook("signed")]),
+    ],
+    { "1/1": signed() },
+  );
+  const chain = fakeChain();
+
+  const results = await relayOnce(oracle.view, chain);
+
+  expect(results).toEqual([
+    {
+      hook: { assertionId: 1, hookIndex: 1, chainId: 84532, receiver, consumer },
+      result: { status: "delivered", transactionHash: TX_HASH },
+    },
+  ]);
+  expect(chain.sent).toHaveLength(1);
+  expect(oracle.calls).toContainEqual({
+    method: "get_signed_result",
+    args: { assertion_id: 1, hook_index: 1 },
+  });
+});
+
+test("a Relayer pass pages through older Assertions", async () => {
+  const many = Array.from({ length: 5 }, (_, i) => assertion(5 - i, "settled", []));
+  const oracle = fakeOracle(many, {});
+
+  await relayOnce(oracle.view, fakeChain(), { pageSize: 2 });
+
+  expect(oracle.calls.map((c) => c.args)).toEqual([
+    { limit: 2 },
+    { limit: 2, before_id: 4 },
+    { limit: 2, before_id: 2 },
+  ]);
 });

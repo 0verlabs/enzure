@@ -325,3 +325,64 @@ export function deliverArgs(signed: SignedResultView) {
     signed.s as Hex,
   ] as const;
 }
+
+/**
+ * Calls a view method of the oracle contract with JSON arguments and returns
+ * its parsed JSON result, for example near-kit's `near.view(oracle, method, args)`.
+ */
+export type OracleView = <T>(method: string, args: Record<string, unknown>) => Promise<T>;
+
+/** Gas and deposit for a `sign_hook` call: the signer needs at least 1 yoctoNEAR, the call at least 60 Tgas. */
+export const SIGN_HOOK_GAS = "300000000000000";
+export const SIGN_HOOK_DEPOSIT_YOCTO = "1";
+
+/** Every Assertion, newest first, read page by page with `list_assertions`. */
+export async function listAssertions(
+  view: OracleView,
+  { pageSize = 100 }: { pageSize?: number } = {},
+): Promise<AssertionView[]> {
+  const all: AssertionView[] = [];
+  for (let beforeId: number | undefined; ;) {
+    const page = await view<AssertionView[]>("list_assertions", {
+      limit: pageSize,
+      ...(beforeId === undefined ? {} : { before_id: beforeId }),
+    });
+    all.push(...page);
+    if (page.length < pageSize || page.at(-1)!.id <= 1) return all;
+    beforeId = page.at(-1)!.id;
+  }
+}
+
+export type RelayPassResult = {
+  hook: EvmHookRef;
+  result: RelayResult | { status: "failed"; error: string };
+};
+
+/**
+ * One Relayer pass: reads the oracle's Assertions, and for each signed EVM
+ * Hook for the wallet's chain reads its signed result and delivers it with
+ * `relaySignedResult`. A failure on one Hook is reported and doesn't stop the
+ * others. Results already recorded by the Receiver cost one read each.
+ */
+export async function relayOnce(
+  view: OracleView,
+  clients: RelayerClients,
+  options: { pageSize?: number } = {},
+): Promise<RelayPassResult[]> {
+  const chainId = await clients.publicClient.getChainId();
+  const hooks = evmHooksToRelay(await listAssertions(view, options), chainId);
+  const results: RelayPassResult[] = [];
+  for (const hook of hooks) {
+    try {
+      const signed = await view<SignedResultView | null>("get_signed_result", {
+        assertion_id: hook.assertionId,
+        hook_index: hook.hookIndex,
+      });
+      if (signed === null) continue;
+      results.push({ hook, result: await relaySignedResult(clients, signed) });
+    } catch (error) {
+      results.push({ hook, result: { status: "failed", error: String(error) } });
+    }
+  }
+  return results;
+}
