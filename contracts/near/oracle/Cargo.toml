@@ -41,6 +41,8 @@ near-api = { workspace = true }
 cargo-near-build = { workspace = true }
 tokio = { workspace = true }
 testresult = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 [lints]
 workspace = true
