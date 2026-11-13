@@ -194,7 +194,15 @@ async fn a_failed_signing_leaves_the_hook_ready_to_sign_again() -> TestResult {
     let id = evm.settled_with(&asserter, json!([evm_hook()])).await?;
 
     evm.set_mode("fail").await?;
-    let failed = evm.sign_hook(&asserter, id, 0, ONE_YOCTO).await?;
+    // A failed signing hands the deposit back to the caller, not the oracle.
+    let deposit = NearToken::from_near(1);
+    let before = evm.world.near_balance(&asserter).await?;
+    let failed = evm.sign_hook(&asserter, id, 0, deposit).await?;
+    let spent = before.saturating_sub(evm.world.near_balance(&asserter).await?);
+    assert!(
+        spent < NearToken::from_millinear(20),
+        "a failed signing kept {spent}"
+    );
     // The callback doesn't panic: the transaction succeeds and returns false.
     assert!(!failed.clone().json::<bool>()?);
     assert_eq!(

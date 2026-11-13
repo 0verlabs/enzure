@@ -12,7 +12,7 @@
 use near_sdk::json_types::U64;
 use near_sdk::serde::Deserialize;
 use near_sdk::serde_json::{self, json};
-use near_sdk::{AccountId, Gas, GasWeight, Promise, env, near, require};
+use near_sdk::{AccountId, Gas, GasWeight, NearToken, Promise, PromiseError, env, near, require};
 
 use crate::events::Event;
 use crate::hooks::{HookView, StoredHook};
@@ -221,7 +221,8 @@ impl StoredEvmHook {
 impl Oracle {
     /// Starts signing an EVM Hook of a settled Assertion. Anyone can call it,
     /// attaching the Chain Signatures deposit (1 yoctoNEAR today), which is
-    /// passed on to the signer, and 100 Tgas (at least 60). The Hook is marked as
+    /// passed on to the signer (and returned to the caller if the signer's call
+    /// fails), and 100 Tgas (at least 60). The Hook is marked as
     /// signing first, so another call is rejected until the signer answers; if
     /// it fails or times out, the Hook can be signed again. The transaction's
     /// result is true if the Hook was signed.
@@ -277,19 +278,42 @@ impl Oracle {
                 Self::ext(env::current_account_id())
                     .with_static_gas(GAS_FOR_ON_HOOK_SIGNED)
                     .with_unused_gas_weight(0)
-                    .on_hook_signed(assertion_id, hook_index),
+                    .on_hook_signed(
+                        assertion_id,
+                        hook_index,
+                        Some(env::predecessor_account_id()),
+                        Some(deposit),
+                    ),
             )
     }
 
     /// Stores the signer's answer, or returns the Hook to unsigned if the
-    /// request failed, timed out or returned something unreadable. Never panics,
-    /// so the Hook never stays stuck in signing. Returns true if it was signed.
+    /// request failed, timed out or returned something unreadable. If the
+    /// signer's call failed, its deposit came back to the oracle, and is sent
+    /// on to `caller`, the account that called `sign_hook`. `caller` and
+    /// `deposit` are optional so a request started before this version still
+    /// lands. Never panics, so the Hook never stays stuck in signing. Returns
+    /// true if it was signed.
     #[private]
-    pub fn on_hook_signed(&mut self, assertion_id: u64, hook_index: u32) -> bool {
+    pub fn on_hook_signed(
+        &mut self,
+        assertion_id: u64,
+        hook_index: u32,
+        caller: Option<AccountId>,
+        deposit: Option<NearToken>,
+    ) -> bool {
         let signature = if env::promise_results_count() == 1 {
-            env::promise_result_checked(0, MAX_SIGNER_RESPONSE_BYTES)
-                .map_err(|_| "signer_failed")
-                .and_then(|bytes| parse_signer_response(&bytes).ok_or("invalid_response"))
+            match env::promise_result_checked(0, MAX_SIGNER_RESPONSE_BYTES) {
+                Ok(bytes) => parse_signer_response(&bytes).ok_or("invalid_response"),
+                Err(PromiseError::Failed) => {
+                    if let (Some(caller), Some(deposit)) = (caller, deposit) {
+                        refund(caller, deposit);
+                    }
+                    Err("signer_failed")
+                }
+                // The signer answered, and kept the deposit, with something far too long.
+                Err(_) => Err("signer_failed"),
+            }
         } else {
             Err("signer_failed")
         };
@@ -386,6 +410,16 @@ fn no_evm_hook(assertion_id: u64, hook_index: u32) -> ! {
     env::panic_str(&format!(
         "Assertion {assertion_id} has no EVM Hook at index {hook_index}"
     ))
+}
+
+/// Sends a failed signing's deposit back to whoever called `sign_hook`, if the
+/// oracle can spare it without dipping into its storage stake; a transfer it
+/// can't afford would fail the callback.
+fn refund(caller: AccountId, deposit: NearToken) {
+    let locked = env::storage_byte_cost().saturating_mul(u128::from(env::storage_usage()));
+    if env::account_balance().saturating_sub(locked) >= deposit {
+        Promise::new(caller).transfer(deposit).detach();
+    }
 }
 
 /// The signer's response for domain 0:
