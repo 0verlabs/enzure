@@ -1,6 +1,6 @@
 # Enzure
 
-An AI optimistic oracle on NEAR. Bonded statements are accepted as true unless disputed; disputes get a first ruling from a TEE-signed AI and can be appealed to a DAO. Settled results are delivered to consumers on NEAR and on EVM chains.
+An optimistic oracle on NEAR for the promises a contract can't check by itself. Bonded statements are accepted as true unless disputed; disputes get a first ruling from a TEE-signed AI and can be appealed to a DAO. Settled results are delivered to consumers on NEAR and on EVM chains.
 
 ## Language
 
