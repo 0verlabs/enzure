@@ -22,11 +22,12 @@ function assertion(id: number, overrides: Partial<OracleAssertion> = {}): Oracle
     dispute: null,
     ai_verdicts: [],
     appeal_window_ends_at_ns: null,
+    appeal: null,
     ...overrides,
   };
 }
 
-const disputed = (id: number, disputedAt: bigint) =>
+const disputed = (id: number, disputedAt: bigint, aiVerdictDeadline = disputedAt + 3_600n * SEC) =>
   assertion(id, {
     state: "disputed",
     dispute: {
@@ -34,6 +35,7 @@ const disputed = (id: number, disputedAt: bigint) =>
       evidence_hash: null,
       seed: 7,
       disputed_at_ns: String(disputedAt),
+      ai_verdict_deadline_ns: String(aiVerdictDeadline),
     },
   });
 
@@ -60,6 +62,24 @@ const settle = (assertionId: number) => ({
   deposit: "0",
 });
 
+test("an Assertion In Appeal is due to settle from its DAO deadline, not before", () => {
+  // Sent to Appeal by check_timeout, so its AI Verdict deadline passed long ago.
+  const inAppeal = assertion(7, {
+    ...disputed(7, T0 + 10n * SEC),
+    state: "in_appeal",
+    appeal: {
+      reason: "no_verdict",
+      appellant: null,
+      appeal_bond: null,
+      started_at_ns: String(T0 + 3_700n * SEC),
+      dao_deadline_ns: String(T0 + 608_500n * SEC),
+    },
+  });
+
+  expect(dueCalls([inAppeal], { nowNs: T0 + 608_500n * SEC - 1n })).toEqual([]);
+  expect(dueCalls([inAppeal], { nowNs: T0 + 608_500n * SEC })).toEqual([settle(7)]);
+});
+
 test("an undisputed Assertion is due to settle from the end of Liveness, not before", () => {
   const assertions = [assertion(1)];
 
@@ -80,11 +100,13 @@ test("settled and disputed Assertions are never due to settle", () => {
     disputed(3, T0 + 10n * SEC),
   ];
 
-  expect(dueCalls(assertions, { nowNs: T0 + 1_000_000n * SEC })).toEqual([]);
+  const due = dueCalls(assertions, { nowNs: T0 + 1_000_000n * SEC });
+  expect(due.filter((call) => call.method === "settle")).toEqual([]);
 });
 
-test("a disputed Assertion with no AI Verdict is due for check_timeout once the AI Verdict deadline has passed", () => {
-  const assertions = [disputed(5, T0 + 10n * SEC)];
+test("a disputed Assertion with no AI Verdict is due for check_timeout from the AI Verdict deadline in its dispute", () => {
+  // The deadline is fixed at dispute time, here 1800 s after the dispute.
+  const assertions = [disputed(5, T0 + 10n * SEC, T0 + 1_810n * SEC)];
   const timeout = {
     method: "check_timeout",
     args: { assertion_id: 5 },
@@ -92,16 +114,8 @@ test("a disputed Assertion with no AI Verdict is due for check_timeout once the 
     deposit: "0",
   };
 
-  expect(
-    dueCalls(assertions, { nowNs: T0 + 3_610n * SEC - 1n, aiVerdictDeadlineSecs: 3_600 }),
-  ).toEqual([]);
-  expect(dueCalls(assertions, { nowNs: T0 + 3_610n * SEC, aiVerdictDeadlineSecs: 3_600 })).toEqual([
-    timeout,
-  ]);
-});
-
-test("check_timeout is never due while the oracle has no AI Verdict deadline", () => {
-  expect(dueCalls([disputed(5, T0)], { nowNs: T0 + 1_000_000n * SEC })).toEqual([]);
+  expect(dueCalls(assertions, { nowNs: T0 + 1_810n * SEC - 1n })).toEqual([]);
+  expect(dueCalls(assertions, { nowNs: T0 + 1_810n * SEC })).toEqual([timeout]);
 });
 
 test("unsigned EVM Hooks of settled Assertions are due for sign_hook with its gas and deposit", () => {

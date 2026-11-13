@@ -38,9 +38,11 @@ async function disputedAssertion(id = 1, { withEvidence = true } = {}): Promise<
       evidence_hash: withEvidence ? await sha256Hex(bytes(disputerEvidence)) : null,
       seed: fixture.input.seed,
       disputed_at_ns: "1794568710000000000",
+      ai_verdict_deadline_ns: "1794572310000000000",
     },
     ai_verdicts: [],
     appeal_window_ends_at_ns: null,
+    appeal: null,
   };
 }
 
@@ -329,7 +331,7 @@ test("each disputed Assertion gets one AI Verdict submitted, with 300 TGas and n
   const submit = recordingCall();
   const resolver = createResolver({ ...options(oracle.view, services.fetch), call: submit.call });
   const assertion = await disputedAssertion();
-  const settled = { ...(await disputedAssertion(2)), state: "settled" };
+  const settled: OracleAssertion = { ...(await disputedAssertion(2)), state: "settled" };
 
   const first = await resolver.pass([settled, assertion]);
   // The view may still show it disputed until the transaction lands.
@@ -392,7 +394,7 @@ test("Assertions that already have an AI Verdict are left alone", async () => {
   const services = await fakeServices();
   const submit = recordingCall();
   const resolver = createResolver({ ...options(oracle.view, services.fetch), call: submit.call });
-  const ruled = {
+  const ruled: OracleAssertion = {
     ...(await disputedAssertion()),
     state: "ruled",
     ai_verdicts: [

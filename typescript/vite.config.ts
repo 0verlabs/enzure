@@ -1,7 +1,8 @@
 import { defineConfig } from "vite-plus";
 
 export default defineConfig({
-  fmt: {},
+  // TanStack Router regenerates routeTree.gen.ts on every dev run and build.
+  fmt: { ignorePatterns: ["**/routeTree.gen.ts"] },
   lint: {
     jsPlugins: [{ name: "vite-plus", specifier: "vite-plus/oxlint-plugin" }],
     rules: { "vite-plus/prefer-vite-plus-imports": "error" },
@@ -11,7 +12,7 @@ export default defineConfig({
     cache: true,
   },
   test: {
-    // Each package runs its tests with its own vite.config.ts.
-    projects: ["apps/*", "packages/*"],
+    // Each package runs its tests with its own vite.config.ts. The web app has no tests.
+    projects: ["apps/*", "packages/*", "!apps/web"],
   },
 });

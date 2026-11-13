@@ -102,26 +102,11 @@ async function chainTimeNs(): Promise<bigint> {
   return BigInt(Date.parse(status.sync_info.latest_block_time)) * 1_000_000n;
 }
 
-/**
- * The oracle's AI Verdict deadline in seconds, or undefined if its config has
- * none. Until the Appeal ticket (#7) deploys `check_timeout`, the config has no
- * `ai_verdict_deadline`, and the Scheduler doesn't call it.
- */
-async function aiVerdictDeadlineSecs(): Promise<number | undefined> {
-  const oracleConfig = await view<{ ai_verdict_deadline?: number }>("get_config", {});
-  return typeof oracleConfig.ai_verdict_deadline === "number"
-    ? oracleConfig.ai_verdict_deadline
-    : undefined;
-}
-
 async function pass(): Promise<void> {
   const assertions = await listAssertions<OracleAssertion>(view);
 
   // Scheduler: settle, check_timeout and sign_hook as soon as they are callable.
-  const due = dueCalls(assertions, {
-    nowNs: await chainTimeNs(),
-    aiVerdictDeadlineSecs: await aiVerdictDeadlineSecs(),
-  });
+  const due = dueCalls(assertions, { nowNs: await chainTimeNs() });
   for (const { method, args, gas, deposit } of due) {
     try {
       await call(method, { ...args }, { gas, deposit });

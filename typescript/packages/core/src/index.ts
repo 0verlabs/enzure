@@ -37,6 +37,29 @@ export {
   type ResultMessage,
 } from "./result-message.ts";
 export {
+  assertionEvents,
+  assertionTimeline,
+  fetchAssertionEvents,
+  nearRpcView,
+  timelineTransactions,
+  type AiVerdictView,
+  type AppealView,
+  type AssertionState,
+  type DisputeView,
+  type ExplorerOptions,
+  type ExplorerTransaction,
+  type NearRpcOptions,
+  type OracleAssertion,
+  type OracleEvent,
+  type TimelineStep,
+} from "./oracle-reads.ts";
+export {
+  fetchContent,
+  putContent,
+  type FetchedContent,
+  type StorageOptions,
+} from "./storage-client.ts";
+export {
   RECEIVER_ABI,
   SIGN_HOOK_DEPOSIT_YOCTO,
   SIGN_HOOK_GAS,
@@ -59,15 +82,7 @@ export {
   type SignedResultCheck,
   type SignedResultView,
 } from "./relayer.ts";
-export {
-  SCHEDULER_GAS,
-  dueCalls,
-  type AiVerdictView,
-  type DisputeView,
-  type DueCall,
-  type DueCallOptions,
-  type OracleAssertion,
-} from "./scheduler.ts";
+export { SCHEDULER_GAS, dueCalls, type DueCall, type DueCallOptions } from "./scheduler.ts";
 export {
   NEAR_AI_URL,
   SUBMIT_AI_VERDICT_GAS,
