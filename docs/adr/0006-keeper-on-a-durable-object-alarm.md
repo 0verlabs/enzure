@@ -1,0 +1,9 @@
+# The Keeper runs on a Durable Object alarm, with one Relayer per chain
+
+Supersedes the part of ADR 0005 that put the Keeper on a Render background worker.
+
+The Keeper (Scheduler, Resolver and Relayer) runs on Cloudflare Workers as one Durable Object whose alarm runs a pass every `POLL_INTERVAL_MS` and then sets the next alarm, so all deployments are on Cloudflare. A cron trigger every minute sets the alarm if none is set, which starts the loop after a deploy and restarts it if it is ever lost. Only one alarm handler runs at a time per Durable Object, so passes never overlap and the Keeper's NEAR and EVM accounts never send two transactions at once. The Resolver's attempts are kept in the Durable Object's SQLite storage, so a restart doesn't resolve an Assertion twice. An alarm handler may run for 15 minutes of wall time, and network waits don't count as CPU time, so a pass, including the Resolver's 30-second wait for a NEAR AI signature, fits. The same pass also runs as a Node process for local development and the testnet scripts.
+
+One Keeper relays to every configured chain. Each chain is switched on by `<CHAIN>_RPC_URL` and `<CHAIN>_RELAYER_KEY`, and is listed in the Keeper with the chain ids its RPC may report; Base is the only one so far. Another EVM chain is a new entry in that list, because the EVM relayer in core works with any EVM chain. A chain of another kind, such as Solana, needs its own signed result, Receiver and relayer code.
+
+We rejected Cron Triggers alone, because they run at most once a minute and two runs can overlap and send the same transactions twice. We rejected Workflows, because the Keeper is one endless loop over shared state, not a set of independent jobs. We rejected one Keeper per chain, because every Keeper also runs the Scheduler and Resolver, so a second one would send the same NEAR transactions from the same account and ask NEAR AI for every verdict twice.

@@ -19,4 +19,4 @@ Read `docs/adr/0005-hybrid-monorepo-layout-and-stack.md` before adding code or d
 - `contracts/<chain>/`: production contracts only.
 - `typescript/`: one Vite+ monorepo with pnpm. Business logic goes in `typescript/packages/core`; deployed apps go in `typescript/apps/` and own their auth, validation, routes and config.
 - `examples/`: example and demo code. `scripts/`: test and operations scripts. `fixtures/`: shared real signed test data.
-- Deploy to Cloudflare; long-lived processes go to Render.
+- Deploy to Cloudflare. The Keeper runs on a Durable Object alarm (`docs/adr/0006-keeper-on-a-durable-object-alarm.md`); ask before adding another host.
