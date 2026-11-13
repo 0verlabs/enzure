@@ -1,0 +1,48 @@
+# Render Blueprint: the Keeper service (Resolver, Scheduler and Relayer) as one
+# background worker. See typescript/apps/keeper/README.md.
+#
+# Secrets are `sync: false`: Render asks for them when the Blueprint is first
+# applied, and they never live in this repository.
+services:
+  - type: worker
+    name: enzure-keeper
+    runtime: node
+    plan: starter
+    region: oregon
+    rootDir: typescript
+    buildFilter:
+      paths:
+        - typescript/apps/keeper/**
+        - typescript/packages/core/**
+        - typescript/pnpm-lock.yaml
+        - typescript/pnpm-workspace.yaml
+        - render.yaml
+    # Node 26 ships without corepack, so pnpm is installed with npm. The filter
+    # installs only the Keeper and core, not the Cloudflare apps.
+    buildCommand: >-
+      npm install --global pnpm@12.18.0 &&
+      pnpm install --frozen-lockfile --filter "@enzure/keeper..." &&
+      pnpm --filter @enzure/keeper run build
+    startCommand: node apps/keeper/dist/main.mjs
+    envVars:
+      - key: NODE_VERSION
+        value: 26.13.1
+      - key: NEAR_NETWORK
+        value: testnet
+      - key: ORACLE_ACCOUNT_ID
+        sync: false
+      - key: NEAR_ACCOUNT_ID
+        sync: false
+      - key: NEAR_PRIVATE_KEY
+        sync: false
+      - key: NEARAI_API_KEY
+        sync: false
+      - key: STORAGE_URL
+        sync: false
+      - key: POLL_INTERVAL_MS
+        value: "15000"
+      # Optional: set both to run the Relayer (Base Sepolia).
+      - key: EVM_RPC_URL
+        sync: false
+      - key: EVM_PRIVATE_KEY
+        sync: false

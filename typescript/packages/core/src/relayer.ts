@@ -337,13 +337,13 @@ export const SIGN_HOOK_GAS = "300000000000000";
 export const SIGN_HOOK_DEPOSIT_YOCTO = "1";
 
 /** Every Assertion, newest first, read page by page with `list_assertions`. */
-export async function listAssertions(
+export async function listAssertions<T extends AssertionView = AssertionView>(
   view: OracleView,
   { pageSize = 100 }: { pageSize?: number } = {},
-): Promise<AssertionView[]> {
-  const all: AssertionView[] = [];
+): Promise<T[]> {
+  const all: T[] = [];
   for (let beforeId: number | undefined; ;) {
-    const page = await view<AssertionView[]>("list_assertions", {
+    const page = await view<T[]>("list_assertions", {
       limit: pageSize,
       ...(beforeId === undefined ? {} : { before_id: beforeId }),
     });
