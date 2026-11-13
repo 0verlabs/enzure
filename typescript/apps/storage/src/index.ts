@@ -28,7 +28,7 @@ const contentParams = z.object({
   hash: z.string().refine(isContentHash, "Expected a sha256 as 64 lowercase hex characters."),
 });
 
-const validHash = zValidator("param", contentParams, (result, c) => {
+const hashParam = zValidator("param", contentParams, (result, c) => {
   if (!result.success) {
     return c.json({ error: "invalid_hash", message: result.error.issues[0]?.message }, 400);
   }
@@ -49,17 +49,16 @@ const tooLarge = { error: "too_large", maxSize: MAX_CONTENT_BYTES } as const;
 app.put(
   "/content/:hash",
   uploadRateLimit,
-  validHash,
+  hashParam,
   // Rejects by Content-Length before reading, and stops a streamed body at the cap.
   bodyLimit({ maxSize: MAX_CONTENT_BYTES, onError: (c) => c.json(tooLarge, 413) }),
   async (c) => {
     const { hash } = c.req.valid("param");
     const bytes = new Uint8Array(await c.req.arrayBuffer());
-    const check = await checkContent(hash, bytes);
-    if (!check.ok) {
-      return check.reason === "too_large"
-        ? c.json(tooLarge, 413)
-        : c.json({ error: check.reason, expected: check.expected, actual: check.actual }, 422);
+    const contentCheck = await checkContent(hash, bytes);
+    if (!contentCheck.ok) {
+      const { ok: _, reason, ...details } = contentCheck;
+      return c.json({ error: reason, ...details }, reason === "too_large" ? 413 : 422);
     }
     // Content is fixed by its hash, so a stored copy is already this content.
     if (await c.env.CONTENT.head(hash)) {
@@ -71,7 +70,7 @@ app.put(
   },
 );
 
-app.get("/content/:hash", validHash, async (c) => {
+app.get("/content/:hash", hashParam, async (c) => {
   const { hash } = c.req.valid("param");
   const object = await c.env.CONTENT.get(hash);
   if (object === null) {

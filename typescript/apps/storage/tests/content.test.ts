@@ -12,8 +12,15 @@ const CLAIM_HASH = "92a68687cda219c63223154d2855c33635f7bd32dbbd67942b8484334cec
 // sha256 of zero bytes
 const EMPTY_HASH = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
-function upload(hash: string, body: BodyInit, headers: HeadersInit = {}): Promise<Response> {
-  return exports.default.fetch(`${BASE}/content/${hash}`, { method: "PUT", body, headers });
+// A fresh client address per upload, so these tests never reach the upload rate limit.
+let client = 0;
+
+function upload(hash: string, body: BodyInit): Promise<Response> {
+  return exports.default.fetch(`${BASE}/content/${hash}`, {
+    method: "PUT",
+    body,
+    headers: { "CF-Connecting-IP": `2001:db8::${(++client).toString(16)}` },
+  });
 }
 
 function download(hash: string): Promise<Response> {
@@ -101,5 +108,30 @@ describe("the size cap", () => {
 
     const put = await upload(hash, body);
     expect(put.status).toBe(413);
+  });
+
+  it("counts the size content takes as a JSON string in the transaction", async () => {
+    // Each newline becomes two bytes ("\n") in the transaction's JSON arguments.
+    const newlines = new Uint8Array(CAP / 2 + 1).fill(0x0a);
+    const hash = "dbd98d722cdb1e452a97cfafb07f5ec8215c1bfea8f2a8ced93a06590a8720c2";
+
+    const put = await upload(hash, newlines);
+    expect(put.status).toBe(413);
+    expect(await put.json()).toMatchObject({ error: "too_large", maxSize: CAP });
+
+    expect((await download(hash)).status).toBe(404);
+  });
+});
+
+describe("text content", () => {
+  it("rejects bytes that aren't UTF-8 text and stores nothing", async () => {
+    const notText = new Uint8Array([0xff, 0xfe]);
+    const hash = "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209";
+
+    const put = await upload(hash, notText);
+    expect(put.status).toBe(422);
+    expect(await put.json()).toMatchObject({ error: "not_utf8" });
+
+    expect((await download(hash)).status).toBe(404);
   });
 });

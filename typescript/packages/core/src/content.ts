@@ -1,23 +1,28 @@
 /**
  * Rules for Claim and Evidence content, which is stored off-chain and
  * committed on-chain by its sha256 hash (ADR 0003).
+ *
+ * Content is UTF-8 text. Its bytes go on-chain only as JSON string arguments
+ * of the `submit_ai_verdict` transaction, together with the model response.
  */
 
 /** NEAR's maximum transaction size: 1.5 MiB. */
-export const NEAR_MAX_TRANSACTION_BYTES = 1_572_864;
+const NEAR_MAX_TRANSACTION_BYTES = 1_572_864;
 
 /**
  * Room left in the `submit_ai_verdict` transaction for the model response,
- * the signature, the JSON escaping of the content and the transaction
- * envelope.
+ * the signature, the other arguments and the transaction envelope: 192 KiB.
  */
-export const RESPONSE_AND_OVERHEAD_BYTES = 196_608;
+const RESPONSE_AND_OVERHEAD_BYTES = 196_608;
 
 /**
- * The largest Claim or Evidence item that can be stored: 448 KiB.
+ * The largest Claim or Evidence item, measured as UTF-8 bytes of its JSON
+ * string without the quotes: 448 KiB.
  *
  * A Claim and both Evidence items (three items) plus the model response
- * must fit in one NEAR transaction.
+ * must fit in one NEAR transaction. Measuring the JSON string counts the
+ * escaping (a newline takes two bytes as `\n`), so three items at the cap
+ * still fit.
  */
 export const MAX_CONTENT_BYTES = Math.floor(
   (NEAR_MAX_TRANSACTION_BYTES - RESPONSE_AND_OVERHEAD_BYTES) / 3,
@@ -38,23 +43,37 @@ export async function contentHash(bytes: Uint8Array<ArrayBuffer>): Promise<strin
 
 export type ContentCheck =
   | { ok: true }
-  | { ok: false; reason: "too_large"; size: number; maxSize: number }
-  | { ok: false; reason: "hash_mismatch"; expected: string; actual: string };
+  | { ok: false; reason: "hash_mismatch"; expected: string; actual: string }
+  | { ok: false; reason: "not_utf8" }
+  | { ok: false; reason: "too_large"; size: number; maxSize: number };
+
+const utf8 = new TextEncoder();
 
 /**
- * Checks that `bytes` may be stored under `hash`: it is within the size cap
- * and its sha256 is exactly `hash`.
+ * Checks that `bytes` may be stored under `hash`: its sha256 is exactly
+ * `hash`, it is UTF-8 text, and as a JSON string it is within the size cap.
  */
 export async function checkContent(
   hash: string,
   bytes: Uint8Array<ArrayBuffer>,
 ): Promise<ContentCheck> {
+  // Escaping only adds bytes, so content over the cap can't fit as JSON.
   if (bytes.byteLength > MAX_CONTENT_BYTES) {
     return { ok: false, reason: "too_large", size: bytes.byteLength, maxSize: MAX_CONTENT_BYTES };
   }
   const actual = await contentHash(bytes);
   if (actual !== hash) {
     return { ok: false, reason: "hash_mismatch", expected: hash, actual };
+  }
+  let text: string;
+  try {
+    text = new TextDecoder("utf-8", { fatal: true, ignoreBOM: true }).decode(bytes);
+  } catch {
+    return { ok: false, reason: "not_utf8" };
+  }
+  const size = utf8.encode(JSON.stringify(text)).byteLength - 2;
+  if (size > MAX_CONTENT_BYTES) {
+    return { ok: false, reason: "too_large", size, maxSize: MAX_CONTENT_BYTES };
   }
   return { ok: true };
 }

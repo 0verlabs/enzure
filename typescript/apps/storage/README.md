@@ -16,9 +16,12 @@ Hashes are sha256 as 64 lowercase hex characters.
 Rejections, with a JSON `error` field:
 
 - `400 invalid_hash`: the path isn't a lowercase hex sha256.
-- `413 too_large`: the body is over 448 KiB (458,752 bytes). The cap leaves room for a Claim, both Evidence items and the model response in one 1.5 MiB NEAR transaction. The hash and size rules live in `@enzure/core`.
+- `413 too_large`: the content is over 448 KiB (458,752 bytes), measured as its JSON string, because that is how it travels in the `submit_ai_verdict` transaction. Escaping counts, so a newline takes two bytes. The cap leaves room for a Claim, both Evidence items and the model response in one 1.5 MiB NEAR transaction.
 - `422 hash_mismatch`: the body's sha256 isn't the hash in the path. Nothing is stored.
-- `429 rate_limited`: more than 30 uploads in a minute from one IP. Downloads aren't limited.
+- `422 not_utf8`: the body isn't UTF-8 text. Claims and Evidence are text. Nothing is stored.
+- `429 rate_limited`: more than 30 uploads in a minute from one IP. Downloads aren't limited, because stored content never changes and can be cached.
+
+The hash, text and size rules live in `@enzure/core`.
 
 CORS allows the origins in `ALLOWED_ORIGINS` in `cloudflare.config.ts`: the web app's local dev servers and `https://enzure-web.luckzivanius.workers.dev`. If the web app (ticket #13) deploys under another name, update that list and redeploy.
 
