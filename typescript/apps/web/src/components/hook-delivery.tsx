@@ -14,37 +14,13 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { config, evmAddressUrl } from "@/config";
 import { RETRY_HOOK_GAS, formatTime, oracle, shortHash } from "@/lib/oracle";
-import { useWallet } from "@/lib/wallet";
+import { useOracleAction } from "@/lib/oracle-action";
 
 type NearHookStep = Extract<TimelineStep, { kind: "near_hook" }>;
 type EvmHookStep = Extract<TimelineStep, { kind: "evm_hook" }>;
 
 /** How often an undelivered EVM Hook re-reads its Receiver. */
 const DELIVERY_REFRESH_MS = 15_000;
-
-/** Sends one oracle call from the wallet and reports its transaction, result and error. */
-function useOracleAction(onDone: () => void) {
-  const wallet = useWallet();
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<unknown>(null);
-  const [sent, setSent] = useState<{ hash: string; value: unknown } | null>(null);
-
-  async function run(call: Parameters<typeof wallet.call>[0]) {
-    setPending(true);
-    setError(null);
-    try {
-      const { transactionHash, value } = await wallet.call(call);
-      setSent({ hash: transactionHash, value });
-      onDone();
-    } catch (cause) {
-      setError(cause);
-    } finally {
-      setPending(false);
-    }
-  }
-
-  return { wallet, pending, error, sent, run };
-}
 
 const NEAR_STATUS = {
   pending: { label: "Pending", variant: "outline" },
