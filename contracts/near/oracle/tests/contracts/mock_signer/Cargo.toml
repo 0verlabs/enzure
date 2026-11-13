@@ -1,0 +1,19 @@
+[package]
+name = "mock-signer"
+description = "Test-only contract: stands in for the Chain Signatures signer (v1.signer-prod.testnet) in the sandbox"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+near-sdk = { workspace = true }
+k256 = { workspace = true }
+
+[lints]
+workspace = true

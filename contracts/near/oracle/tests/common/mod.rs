@@ -48,7 +48,7 @@ static SWITCHABLE_CONSUMER_WASM: OnceLock<Vec<u8>> = OnceLock::new();
 static EXAMPLE_NEAR_CONSUMER_WASM: OnceLock<Vec<u8>> = OnceLock::new();
 
 /// Builds a contract outside the oracle crate, sharing the workspace's target folder.
-fn build_contract(manifest: &str) -> Vec<u8> {
+pub fn build_contract(manifest: &str) -> Vec<u8> {
     let target = concat!(env!("CARGO_MANIFEST_DIR"), "/../target");
     let opts = cargo_near_build::BuildOpts::builder()
         .manifest_path(manifest)
@@ -90,6 +90,11 @@ pub struct World {
 
 impl World {
     pub async fn new() -> TestResult<Self> {
+        Self::with_init_args(json!({})).await
+    }
+
+    /// Like `new`, with `extra` merged into the oracle's `new` arguments.
+    pub async fn with_init_args(extra: Value) -> TestResult<Self> {
         let wasm = oracle_wasm().to_vec();
         let sandbox = near_sandbox::Sandbox::start_sandbox().await?;
         let network = NetworkConfig::from_rpc_url("sandbox", sandbox.rpc_addr.parse()?);
@@ -107,9 +112,13 @@ impl World {
         world.dao = world.create_account("dao").await?;
         world.oracle = world.create_account("oracle").await?;
 
+        let mut init_args = json!({ "dao": world.dao });
+        if let (Some(args), Value::Object(extra)) = (init_args.as_object_mut(), extra) {
+            args.extend(extra);
+        }
         Contract::deploy(world.oracle.clone())
             .use_code(wasm)
-            .with_init_call("new", json!({ "dao": world.dao }))?
+            .with_init_call("new", init_args)?
             .with_signer(world.signer.clone())
             .send_to(&world.network)
             .await?

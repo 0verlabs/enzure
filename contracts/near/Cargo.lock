@@ -1797,6 +1797,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "k256"
+version = "0.13.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6e3919bbaa2945715f0bb6d3934a173d1e9a59ac23767fbaaef277265a7411b"
+dependencies = [
+ "cfg-if 1.0.5",
+ "ecdsa",
+ "elliptic-curve",
+ "sha2 0.10.9",
+]
+
+[[package]]
 name = "keccak"
 version = "0.1.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1909,6 +1921,14 @@ dependencies = [
  "libc",
  "wasi",
  "windows-sys 0.61.2",
+]
+
+[[package]]
+name = "mock-signer"
+version = "0.1.0"
+dependencies = [
+ "k256",
+ "near-sdk",
 ]
 
 [[package]]
@@ -2566,11 +2586,13 @@ name = "oracle"
 version = "0.1.0"
 dependencies = [
  "cargo-near-build",
+ "k256",
  "near-api",
  "near-sandbox",
  "near-sdk",
  "serde",
  "serde_json",
+ "sha3 0.10.9",
  "testresult",
  "tokio",
 ]

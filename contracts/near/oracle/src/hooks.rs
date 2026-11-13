@@ -2,10 +2,13 @@
 //! `assertion_resolved(assertion_id, truthful)` on a NEAR Consumer with the gas
 //! the Asserter fixed when posting. Settlement commits before the call, so a
 //! failing Consumer never blocks or undoes it, and anyone can retry the Hook.
+//! An EVM Hook is signed for an EVM chain's Receiver with `sign_hook`; see
+//! `evm_hooks.rs`.
 use near_sdk::serde_json::json;
 use near_sdk::{AccountId, Gas, GasWeight, NearToken, Promise, PromiseError, env, near, require};
 
 use crate::events::Event;
+use crate::evm_hooks::{EvmHook, EvmHookStatus, StoredEvmHook};
 use crate::{AssertionState, Config, Oracle, OracleExt};
 
 /// Default for the most Hooks, NEAR and EVM together, one Assertion can have.
@@ -27,12 +30,14 @@ const GAS_FOR_HOOK_CALLER: Gas = Gas::from_tgas(20);
 const CONSUMER_METHOD: &str = "assertion_resolved";
 
 /// A Hook as `assert_claim` takes it, tagged by chain:
-/// `{ "near": { "consumer": "app.near", "gas": "30000000000000" } }`.
+/// `{ "near": { "consumer": "app.near", "gas": "30000000000000" } }` or
+/// `{ "evm": { "chain_id": 84532, "receiver": "0x..", "consumer": "0x.." } }`.
 #[near(serializers = [json, borsh])]
 #[serde(rename_all = "snake_case")]
 #[derive(Clone, Debug, PartialEq)]
 pub enum Hook {
     Near(NearHook),
+    Evm(EvmHook),
 }
 
 /// Calls `assertion_resolved` on `consumer` with exactly `gas` once the
@@ -67,6 +72,14 @@ pub enum HookView {
         gas: Gas,
         status: NearHookStatus,
     },
+    /// Addresses are `0x` lowercase hex. The signed result is read with
+    /// `get_signed_result`.
+    Evm {
+        chain_id: u64,
+        receiver: String,
+        consumer: String,
+        status: EvmHookStatus,
+    },
 }
 
 /// A Hook as the oracle stores it, with its delivery state.
@@ -76,6 +89,7 @@ pub(crate) enum StoredHook {
         hook: NearHook,
         status: NearHookStatus,
     },
+    Evm(StoredEvmHook),
 }
 
 impl StoredHook {
@@ -85,6 +99,7 @@ impl StoredHook {
                 hook,
                 status: NearHookStatus::Pending,
             },
+            Hook::Evm(hook) => Self::Evm(hook.to_stored("hooks[].evm")),
         }
     }
 
@@ -95,6 +110,7 @@ impl StoredHook {
                 gas: hook.gas,
                 status: *status,
             },
+            Self::Evm(hook) => hook.view(),
         }
     }
 }
@@ -105,7 +121,7 @@ pub(crate) fn validate(hooks: &[Hook], config: &Config) {
         hooks.len() <= config.max_hooks as usize,
         format!("At most {} Hooks per Assertion", config.max_hooks)
     );
-    for hook in hooks {
+    for (index, hook) in hooks.iter().enumerate() {
         match hook {
             Hook::Near(near) => require!(
                 !near.gas.is_zero() && near.gas <= config.max_near_hook_gas,
@@ -114,6 +130,9 @@ pub(crate) fn validate(hooks: &[Hook], config: &Config) {
                     config.max_near_hook_gas.as_gas()
                 )
             ),
+            Hook::Evm(evm) => {
+                evm.to_stored(&format!("hooks[{index}].evm"));
+            }
         }
     }
 }
@@ -146,12 +165,14 @@ fn require_gas_for<'a>(hooks: impl Iterator<Item = &'a NearHook>) {
 
 /// Panics unless the call has enough gas to deliver every NEAR Hook.
 pub(crate) fn require_gas_to_deliver(hooks: &[StoredHook]) {
-    require_gas_for(hooks.iter().map(|hook| match hook {
-        StoredHook::Near { hook, .. } => hook,
+    require_gas_for(hooks.iter().filter_map(|hook| match hook {
+        StoredHook::Near { hook, .. } => Some(hook),
+        StoredHook::Evm(_) => None,
     }));
 }
 
-/// Marks every NEAR Hook as delivering and calls its Consumer.
+/// Marks every NEAR Hook as delivering and calls its Consumer. EVM Hooks wait
+/// for `sign_hook`.
 pub(crate) fn deliver_all(assertion_id: u64, outcome: bool, hooks: &mut [StoredHook]) {
     for (index, hook) in hooks.iter_mut().enumerate() {
         match hook {
@@ -159,6 +180,7 @@ pub(crate) fn deliver_all(assertion_id: u64, outcome: bool, hooks: &mut [StoredH
                 *status = NearHookStatus::Delivering;
                 deliver(assertion_id, index as u32, hook, outcome).detach();
             }
+            StoredHook::Evm(_) => {}
         }
     }
 }

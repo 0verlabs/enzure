@@ -2,6 +2,8 @@
 use near_sdk::json_types::U64;
 use near_sdk::{AccountId, Gas, NearToken, near};
 
+use crate::evm_hooks::SignedResult;
+
 /// An amount credited to an account's withdrawable balance.
 #[near(serializers = [json])]
 #[derive(Clone, Debug)]
@@ -58,5 +60,20 @@ pub enum Event {
         assertion_id: u64,
         hook_index: u32,
         consumer: AccountId,
+    },
+    /// An EVM Hook's result message was signed; a Relayer can deliver it.
+    #[event_version("1.0.0")]
+    EvmHookSigned {
+        assertion_id: u64,
+        hook_index: u32,
+        signed_result: SignedResult,
+    },
+    /// Signing failed, timed out (`signer_failed`) or returned an unreadable
+    /// answer (`invalid_response`); the Hook can be signed again.
+    #[event_version("1.0.0")]
+    EvmHookSigningFailed {
+        assertion_id: u64,
+        hook_index: u32,
+        reason: String,
     },
 }
