@@ -1,0 +1,49 @@
+---
+title: "Post a statement with a NEAR bond"
+sidebarTitle: "Post a statement"
+description: "Upload your Claim to Enzure storage, then call assert_claim with its hash, a NEAR bond and a dispute window. Undisputed, it settles as true."
+keywords: ["assert_claim", "claim", "bond", "liveness", "post"]
+icon: "megaphone"
+---
+
+To post a statement, upload its text, then call `assert_claim` with the text's hash and a bond. The call returns the statement's id.
+
+<Steps>
+  <Step title="Upload the Claim">
+    The storage service keeps the text under its sha256 hash and rejects any upload that doesn't match.
+
+    ```bash
+    hash=$(shasum -a 256 claim.txt | cut -d' ' -f1)
+    curl -X PUT --data-binary @claim.txt "https://enzure-storage.luckzivanius.workers.dev/content/$hash"
+    ```
+
+    Upload any Evidence the same way. Text only, up to 448 KiB.
+  </Step>
+  <Step title="Call assert_claim">
+    This posts with a 1 NEAR bond, a 10-minute dispute window and no Hooks:
+
+    ```bash
+    near contract call-function as-transaction oracle-1794575543.enzure-council-a-1794575224.testnet \
+      assert_claim json-args "{\"claim_hash\":\"$hash\",\"evidence_hash\":null,\"bond\":\"1000000000000000000000000\",\"liveness\":600,\"hooks\":[]}" \
+      prepaid-gas '100.0 Tgas' attached-deposit '1.01 NEAR' \
+      sign-as <your-account>.testnet network-config testnet sign-with-keychain send
+    ```
+
+    Attach the bond plus a small storage deposit (0.005 NEAR, plus 0.002 per Hook). Anything extra is refunded.
+  </Step>
+</Steps>
+
+| Argument | Meaning |
+| --- | --- |
+| `claim_hash` | sha256 of the Claim |
+| `evidence_hash` | sha256 of your Evidence, or `null` |
+| `bond` | In yoctoNEAR. At least 1 NEAR |
+| `liveness` | Dispute window in seconds, 60 to 604800. Optional |
+| `hooks` | Contracts to notify when it settles. See [Integration](/developers/integration) |
+
+## Write a clear Claim
+
+The AI judges your Claim from the text alone, and answers UNRESOLVABLE if it's vague. That sends it to the DAO.
+
+- Clear: "The text in the Asserter's Evidence has exactly three lines and contains the word "café"."
+- Vague: "The seller did a good job."

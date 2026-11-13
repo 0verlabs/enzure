@@ -1,0 +1,72 @@
+{
+	"$schema": "https://mintlify.com/docs.json",
+	"theme": "mint",
+	"name": "Enzure",
+	"description": "Enzure is an optimistic oracle on NEAR for the promises a contract can't check by itself. Bonded statements settle as true unless someone disputes them.",
+	"colors": {
+		"primary": "#0084FF",
+		"light": "#00BFFF",
+		"dark": "#0084FF"
+	},
+	"fonts": {
+		"heading": { "family": "Josefin Sans", "weight": 300 },
+		"body": {
+			"family": "Figtree"
+		}
+	},
+	"logo": {
+		"light": "/logo/light.svg",
+		"dark": "/logo/dark.svg"
+	},
+	"favicon": "/favicon.ico",
+	"appearance": {
+		"default": "dark",
+		"strict": true
+	},
+	"background": {
+		"color": {
+			"light": "#FFFFFF",
+			"dark": "#09090B"
+		}
+	},
+	"icons": {
+		"library": "lucide"
+	},
+	"navbar": {
+		"links": [
+			{
+				"type": "github",
+				"href": "https://github.com/0verlabs/enzure"
+			}
+		]
+	},
+	"navigation": {
+		"groups": [
+			{
+				"group": "Get started",
+				"pages": ["index", "how-it-works", "use-cases", "quickstart"]
+			},
+			{
+				"group": "Guides",
+				"pages": ["guides/assert", "guides/dispute", "guides/settle"]
+			},
+			{
+				"group": "Developers",
+				"pages": ["developers/integration", "developers/reference", "developers/deployments"]
+			},
+			{
+				"group": "Help",
+				"pages": ["faq"]
+			}
+		]
+	},
+	"contextual": {
+		"options": ["copy", "view", "chatgpt", "claude"]
+	},
+	"footer": {
+		"socials": {
+			"website": "https://0verlabs.com",
+			"github": "https://github.com/0verlabs/enzure"
+		}
+	}
+}

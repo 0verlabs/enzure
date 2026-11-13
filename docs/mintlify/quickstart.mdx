@@ -1,0 +1,41 @@
+---
+title: "Quickstart: read a settled statement on testnet"
+sidebarTitle: "Quickstart"
+description: "Check the Enzure testnet deployment in three read-only commands: read the oracle's settings, a settled statement and the Claim behind it. No keys needed."
+keywords: ["quickstart", "testnet", "near-cli", "get_assertion"]
+icon: "rocket"
+---
+
+These three commands read the live testnet oracle. They need only `curl` and [near-cli-rs](https://github.com/near/near-cli-rs), and they sign nothing.
+
+<Steps>
+  <Step title="Read the oracle's settings">
+    ```bash
+    near contract call-function as-read-only oracle-1794575543.enzure-council-a-1794575224.testnet \
+      get_config json-args '{}' network-config testnet now
+    ```
+
+    You see the DAO, the minimum bond (1 NEAR) and the timers in seconds.
+  </Step>
+  <Step title="Read a settled statement">
+    Assertion 3 comes from the escrow demo, where a seller agent claimed its poem matched the brief and the buyer disputed.
+
+    ```bash
+    near contract call-function as-read-only oracle-1794575543.enzure-council-a-1794575224.testnet \
+      get_assertion json-args '{"assertion_id":3}' network-config testnet now
+    ```
+
+    You see `"state": "settled"`, `"outcome": true` and one AI Verdict, `TRUE`.
+  </Step>
+  <Step title="Read the Claim">
+    The Claim's text is stored under its hash, so you can check it matches the `claim_hash` you just read.
+
+    ```bash
+    curl -s https://enzure-storage.luckzivanius.workers.dev/content/6737fd606296d5e1ea3ac20f470896757bf8fcd0b84b81da863b54db62178caa | shasum -a 256
+    ```
+
+    It prints the same hash.
+  </Step>
+</Steps>
+
+Next, [post your own statement](/guides/assert).

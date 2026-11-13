@@ -1,0 +1,67 @@
+---
+title: "Act on Enzure outcomes in your NEAR or EVM contract"
+sidebarTitle: "Integration"
+description: "Name your contract in a Hook when a statement is posted. When it settles, Enzure calls your NEAR contract, or your EVM contract through the Receiver."
+keywords: ["integration", "hooks", "consumer", "assertion_resolved", "IEnzureConsumer", "EVM", "NEAR"]
+icon: "plug"
+---
+
+To act on an outcome, name your contract in a **Hook** when the statement is posted. When the statement settles, Enzure calls your contract with the outcome. A statement can have up to 4 Hooks, and they can't change after posting.
+
+Your contract should accept the call only from Enzure and ignore repeats, because anyone can retry a delivery.
+
+<Tabs>
+  <Tab title="NEAR">
+    Add this Hook to `assert_claim`. `gas` is the gas your contract gets, up to 50 TGas.
+
+    ```json
+    { "near": { "consumer": "your-contract.testnet", "gas": "20000000000000" } }
+    ```
+
+    Then implement `assertion_resolved`:
+
+    ```rust
+    pub fn assertion_resolved(&mut self, assertion_id: u64, truthful: bool) {
+        require!(env::predecessor_account_id() == self.oracle, "Only the oracle");
+        if self.outcomes.contains_key(&assertion_id) {
+            return;
+        }
+        self.outcomes.insert(assertion_id, truthful);
+        // Act on the outcome: release funds, resolve a market, ...
+    }
+    ```
+
+    The full example is in [`examples/near-consumer`](https://github.com/0verlabs/enzure/tree/main/examples/near-consumer).
+  </Tab>
+  <Tab title="EVM">
+    Add this Hook to `assert_claim`, with the Receiver on your chain and your contract:
+
+    ```json
+    { "evm": { "chain_id": 84532, "receiver": "0x<Receiver>", "consumer": "0x<your contract>" } }
+    ```
+
+    Then implement `IEnzureConsumer`:
+
+    ```solidity
+    function assertionResolvedCallback(uint256 assertionId, bool truthful, bytes32 claimHash, bytes32 asserter)
+        external
+    {
+        if (msg.sender != receiver) revert NotReceiver();
+        if (results[assertionId].known) return;
+        results[assertionId] = Resolution(true, truthful, claimHash, asserter);
+    }
+    ```
+
+    `claimHash` is the sha256 of the Claim and `asserter` the sha256 of the Asserter's NEAR account, so you can check what was claimed and by whom.
+
+    After settlement, Enzure signs the result through Chain Signatures and a Relayer sends it to the Receiver, which checks the signature and calls you. The full example is in [`examples/evm-consumer`](https://github.com/0verlabs/enzure/tree/main/examples/evm-consumer).
+
+    <Note>
+    No Receiver is deployed on Base Sepolia yet. Deploy one with `./scripts/deploy-receiver.sh <oracle-account>`.
+    </Note>
+  </Tab>
+</Tabs>
+
+## Example: an escrow for agent work
+
+The [escrow demo](https://github.com/0verlabs/enzure/tree/main/examples/escrow) uses an EVM Hook. A buyer funds a job, a seller agent claims its work matches the brief, and the escrow pays the seller on TRUE or refunds the buyer on FALSE.

@@ -1,0 +1,39 @@
+---
+title: "Dispute a statement and appeal a verdict"
+sidebarTitle: "Dispute and appeal"
+description: "Dispute an Enzure statement during its dispute window by matching its bond. If you lose the AI Verdict, appeal to the DAO with one more bond."
+keywords: ["dispute", "appeal", "AI Verdict", "DAO", "bond"]
+icon: "swords"
+---
+
+If you think a statement is false, dispute it before its dispute window closes. You post the same bond as the Asserter, and you can add your own Evidence.
+
+## Dispute
+
+```bash
+near contract call-function as-transaction oracle-1794575543.enzure-council-a-1794575224.testnet \
+  dispute json-args '{"assertion_id":7,"evidence_hash":null}' \
+  prepaid-gas '100.0 Tgas' attached-deposit '1.01 NEAR' \
+  sign-as <your-account>.testnet network-config testnet sign-with-keychain send
+```
+
+Attach the statement's bond plus 0.005 NEAR for storage. Upload Evidence first, as in [Post a statement](/guides/assert), and pass its hash as `evidence_hash`.
+
+Next, a Resolver gets an AI Verdict and submits it. Anyone can be a Resolver; the [Keeper](/faq) does it automatically.
+
+<Warning>
+If the statement turns out to be true, you lose your bond.
+</Warning>
+
+## Appeal
+
+If the AI Verdict goes against you, you can appeal once while the appeal window is open. Attach a bond equal to the statement's bond.
+
+```bash
+near contract call-function as-transaction oracle-1794575543.enzure-council-a-1794575224.testnet \
+  appeal json-args '{"assertion_id":7}' \
+  prepaid-gas '100.0 Tgas' attached-deposit '1 NEAR' \
+  sign-as <your-account>.testnet network-config testnet sign-with-keychain send
+```
+
+The DAO rules with a normal Sputnik DAO proposal that calls `resolve_appeal`. Its ruling is final. If it doesn't rule in time, the AI Verdict stands and you get the appeal bond back.

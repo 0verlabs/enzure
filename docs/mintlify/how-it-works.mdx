@@ -1,0 +1,46 @@
+---
+title: "How Enzure works: post, dispute, rule, settle"
+sidebarTitle: "How it works"
+description: "Every Enzure statement is posted with a bond, can be disputed, gets a ruling if disputed, and then settles. Here is each step and who gets the bonds."
+keywords: ["how it works", "lifecycle", "bond", "dispute", "AI Verdict", "appeal", "settle"]
+icon: "workflow"
+---
+
+Every statement in Enzure, called an **Assertion**, goes through the same steps. Most are never disputed and settle as true once their dispute window closes.
+
+<Steps>
+  <Step title="Post">
+    You post a statement (the **Claim**) with a NEAR bond and a dispute window (**Liveness**). The text is stored off-chain; only its hash goes on-chain.
+  </Step>
+  <Step title="Dispute">
+    Anyone who thinks the Claim is false can dispute it during Liveness by posting the same bond. If nobody does, skip to Settle.
+  </Step>
+  <Step title="Rule">
+    A NEAR AI model running in a TEE reads the Claim and both sides' Evidence and answers TRUE, FALSE or UNRESOLVABLE. The contract accepts the answer only if it can verify the model's signature.
+
+    The losing side can then appeal to the DAO. UNRESOLVABLE, two different verdicts, or no verdict in time also go to the DAO. The DAO's ruling is final.
+  </Step>
+  <Step title="Settle">
+    Once the last window closes, anyone calls `settle`. Bonds are credited to balances you withdraw, and the outcome is delivered to the contracts you named when posting.
+  </Step>
+</Steps>
+
+## Who gets the bonds
+
+| Case | Result |
+| --- | --- |
+| No dispute | The Asserter gets the bond back. |
+| Disputed | The winner gets their bond back plus half the loser's. The DAO gets the other half. |
+| Appealed | The appellant posts one more bond. Win, and you get it back. Lose, and it is split between the winner and the DAO. |
+| The DAO doesn't rule in time | An appealed verdict stands and the appeal bond is returned. Otherwise every bond is returned and the outcome is FALSE. |
+
+## Timers
+
+The DAO sets these. The contract defaults are below; the testnet oracle uses much shorter ones so the demo is quick.
+
+| Timer | Default |
+| --- | --- |
+| Liveness (dispute window) | 2 hours, or any value from 1 minute to 7 days |
+| Time to get an AI Verdict | 1 hour |
+| Appeal window | 24 hours |
+| Time for the DAO to rule | 7 days |
