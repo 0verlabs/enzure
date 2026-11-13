@@ -26,6 +26,11 @@ const GAS_FOR_ON_NEAR_HOOK: Gas = Gas::from_tgas(10);
 const GAS_PER_NEAR_HOOK: Gas = Gas::from_tgas(15);
 /// Gas for the rest of `settle` or `retry_near_hook` when NEAR Hooks are due.
 const GAS_FOR_HOOK_CALLER: Gas = Gas::from_tgas(20);
+/// The most gas `settle` can need to deliver every NEAR Hook of an Assertion:
+/// a transaction carries at most 300 TGas, less a 20 TGas margin. `set_config`
+/// keeps `max_hooks` and `max_near_hook_gas` within it, so every Assertion can
+/// be settled, and every single NEAR Hook delivered, in one transaction.
+pub const MAX_GAS_TO_SETTLE: Gas = Gas::from_tgas(280);
 /// The method a NEAR Consumer implements.
 const CONSUMER_METHOD: &str = "assertion_resolved";
 
@@ -135,6 +140,30 @@ pub(crate) fn validate(hooks: &[Hook], config: &Config) {
             }
         }
     }
+}
+
+/// Panics unless `max_hooks` NEAR Hooks of `max_near_hook_gas` each can be
+/// delivered by one `settle` within `MAX_GAS_TO_SETTLE`.
+pub(crate) fn validate_limits(config: &Config) {
+    if config.max_hooks == 0 {
+        return;
+    }
+    let required = config
+        .max_near_hook_gas
+        .saturating_add(GAS_PER_NEAR_HOOK)
+        .saturating_mul(u64::from(config.max_hooks))
+        .saturating_add(GAS_FOR_HOOK_CALLER);
+    require!(
+        required <= MAX_GAS_TO_SETTLE,
+        format!(
+            "max_hooks NEAR Hooks of max_near_hook_gas each must fit in {} gas to settle, \
+             counting {} gas per Hook and {} for the call; these need {}",
+            MAX_GAS_TO_SETTLE.as_gas(),
+            GAS_PER_NEAR_HOOK.as_gas(),
+            GAS_FOR_HOOK_CALLER.as_gas(),
+            required.as_gas()
+        )
+    );
 }
 
 /// The storage deposit for an Assertion's Hooks.

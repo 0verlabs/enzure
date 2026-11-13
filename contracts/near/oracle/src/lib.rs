@@ -394,6 +394,7 @@ impl Oracle {
         require_liveness_in_range("appeal_window", config.appeal_window);
         require_liveness_in_range("ai_verdict_deadline", config.ai_verdict_deadline);
         require_liveness_in_range("dao_deadline", config.dao_deadline);
+        hooks::validate_limits(&config);
         Event::ConfigChanged {
             min_bond: config.min_bond,
             default_liveness: config.default_liveness,
