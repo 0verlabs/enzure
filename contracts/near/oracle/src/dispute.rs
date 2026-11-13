@@ -188,8 +188,9 @@ impl Oracle {
     ///
     /// `response_body` is the exact response from NEAR AI Cloud, and
     /// `signed_text`, `signature` and `public_key` (hex) come from its
-    /// signature endpoint. The first valid TRUE or FALSE verdict rules the
-    /// Assertion and opens the Appeal Window. An UNRESOLVABLE verdict, or a
+    /// signature endpoint. The first valid TRUE or FALSE verdict, before the
+    /// dispute's AI Verdict deadline, rules the Assertion and opens the Appeal
+    /// Window. An UNRESOLVABLE verdict, or a
     /// verdict that differs from the first during the Appeal Window
     /// (Conflicting Verdicts), sends it to Appeal. Returns the verdict.
     #[allow(clippy::too_many_arguments)]
@@ -255,7 +256,15 @@ impl Oracle {
             "This response is already recorded"
         );
         let first = match assertion.state {
-            AssertionState::Disputed => None,
+            AssertionState::Disputed => {
+                // `check_timeout` is allowed from the deadline on, so no block
+                // allows both.
+                require!(
+                    now < dispute.ai_verdict_deadline_ns,
+                    "AI Verdict deadline has passed; call check_timeout"
+                );
+                None
+            }
             AssertionState::Ruled { .. } => {
                 require!(
                     now < assertion.appeal_window_ends_at_ns().unwrap_or(0),

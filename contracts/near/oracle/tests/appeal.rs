@@ -633,6 +633,11 @@ async fn check_timeout_sends_a_disputed_assertion_with_no_ai_verdict_to_appeal()
             &world.assertion(id).await?["dispute"]["ai_verdict_deadline_ns"],
         ))
         .await?;
+    // From the AI Verdict deadline on, a verdict is too late: the Assertion
+    // goes to Appeal instead.
+    let too_late = s.submit(id, &content, "TRUE").await?;
+    assert!(failure_message(too_late).contains("AI Verdict deadline has passed"));
+    assert_eq!(world.assertion(id).await?["state"], "disputed");
     // Anyone can call it.
     let timed_out = s.check_timeout(id).await?;
     let events = enzure_events(&timed_out);
