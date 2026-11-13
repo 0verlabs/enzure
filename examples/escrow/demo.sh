@@ -64,10 +64,10 @@ load_env "$root" NEAR_ACCOUNT_ID NEAR_PRIVATE_KEY NEARAI_API_KEY EVM_PRIVATE_KEY
 for tool in near forge cast node; do
   command -v "$tool" >/dev/null 2>&1 || { echo "error: '$tool' not found, see docs/toolchain.md" >&2; exit 1; }
 done
-: "${NEAR_ACCOUNT_ID:?Set NEAR_ACCOUNT_ID to the buyer's funded testnet account}"
+: "${NEAR_ACCOUNT_ID:?Set NEAR_ACCOUNT_ID to the funded testnet account of the buyer}"
 : "${NEAR_PRIVATE_KEY:?Set NEAR_PRIVATE_KEY to a full-access key of NEAR_ACCOUNT_ID}"
 : "${NEARAI_API_KEY:?Set NEARAI_API_KEY}"
-: "${EVM_PRIVATE_KEY:?Set EVM_PRIVATE_KEY to the buyer's funded Base Sepolia key}"
+: "${EVM_PRIVATE_KEY:?Set EVM_PRIVATE_KEY to the funded Base Sepolia key of the buyer}"
 export NEAR_ACCOUNT_ID NEAR_PRIVATE_KEY NEARAI_API_KEY EVM_PRIVATE_KEY
 export ORACLE_ACCOUNT_ID="${ORACLE_ACCOUNT_ID:-oracle-1794575543.enzure-council-a-1794575224.testnet}"
 export EVM_RPC_URL="${EVM_RPC_URL:-https://sepolia.base.org}"
