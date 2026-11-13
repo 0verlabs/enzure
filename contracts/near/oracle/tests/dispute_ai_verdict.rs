@@ -515,35 +515,12 @@ async fn submit_ai_verdict_rejects_each_invalid_submission_with_its_own_error() 
     forged.signature = stranger_key.sign(&valid.signed_text);
     reject(content.clone(), forged, "signature does not verify").await?;
 
-    // Until Appeal lands, UNRESOLVABLE is rejected.
-    let unresolvable = Submission::signed(
-        &s.key,
-        MODEL,
-        &request,
-        &verdict_response("chat-8", "UNRESOLVABLE"),
-    );
-    reject(
-        content.clone(),
-        unresolvable,
-        "UNRESOLVABLE AI Verdicts are not supported yet",
-    )
-    .await?;
-    assert_eq!(world.assertion(id).await?["state"], "disputed");
-
     // A response already recorded.
     world
         .submit_verdict(&s.resolver, id, &content, &valid)
         .await?
         .assert_success();
     reject(content.clone(), valid.clone(), "already recorded").await?;
-    // A second, different verdict is not part of this version.
-    let second = Submission::signed(
-        &s.key,
-        MODEL,
-        &request,
-        &verdict_response("chat-9", "FALSE"),
-    );
-    reject(content.clone(), second, "already has an AI Verdict").await?;
     Ok(())
 }
 
@@ -559,6 +536,8 @@ async fn short_appeal_window(world: &World) -> TestResult {
                 "max_hooks": 4,
                 "max_near_hook_gas": near_api::NearGas::from_tgas(50),
                 "appeal_window": 60,
+                "ai_verdict_deadline": 3600,
+                "dao_deadline": 604800,
             } }),
             ONE_YOCTO,
         )

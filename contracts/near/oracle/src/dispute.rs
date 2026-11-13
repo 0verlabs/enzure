@@ -9,7 +9,8 @@ use near_sdk::json_types::U64;
 use near_sdk::{AccountId, NearToken, Promise, env, near, require};
 
 use crate::ai::{self, Content, PromptTemplate, Verdict};
-use crate::events::{Event, Payout};
+use crate::appeal::{Appeal, AppealReason};
+use crate::events::Event;
 use crate::{Assertion, AssertionState, NS_PER_SEC, Oracle, OracleExt, hash};
 
 /// Bytes charged to the Disputer: the dispute record with the longest possible
@@ -19,16 +20,20 @@ const DISPUTE_STORAGE_BYTES: u64 = 500;
 
 #[near(serializers = [borsh])]
 pub(crate) struct Dispute {
-    disputer: AccountId,
+    pub(crate) disputer: AccountId,
     evidence_hash: Option<[u8; 32]>,
     seed: u32,
     disputed_at_ns: u64,
+    /// From this time on, with no AI Verdict, `check_timeout` sends the
+    /// Assertion to Appeal.
+    pub(crate) ai_verdict_deadline_ns: u64,
     appeal_window_ends_at_ns: Option<u64>,
+    pub(crate) appeal: Option<Appeal>,
 }
 
 #[near(serializers = [borsh])]
 pub(crate) struct AcceptedVerdict {
-    verdict: Verdict,
+    pub(crate) verdict: Verdict,
     request_hash: [u8; 32],
     response_hash: [u8; 32],
     public_key: [u8; 32],
@@ -44,6 +49,9 @@ pub struct DisputeView {
     /// The seed the AI request uses, taken from the block's random seed.
     pub seed: u32,
     pub disputed_at_ns: U64,
+    /// With no AI Verdict by this time, anyone can call `check_timeout` to send
+    /// the Assertion to Appeal.
+    pub ai_verdict_deadline_ns: U64,
 }
 
 /// An accepted AI Verdict as the views return it.
@@ -65,6 +73,7 @@ impl Dispute {
             evidence_hash: self.evidence_hash.as_ref().map(hash::to_hex),
             seed: self.seed,
             disputed_at_ns: U64(self.disputed_at_ns),
+            ai_verdict_deadline_ns: U64(self.ai_verdict_deadline_ns),
         }
     }
 }
@@ -98,6 +107,7 @@ impl Oracle {
         let evidence_hash = evidence_hash.map(|hex| hash::parse("evidence_hash", &hex));
         let now = env::block_timestamp();
         let storage = Self::dispute_storage();
+        let ai_verdict_deadline = self.config.ai_verdict_deadline;
         let assertion = self
             .assertions
             .get_mut(&assertion_id)
@@ -127,7 +137,9 @@ impl Oracle {
             evidence_hash,
             seed,
             disputed_at_ns: now,
+            ai_verdict_deadline_ns: now + ai_verdict_deadline * NS_PER_SEC,
             appeal_window_ends_at_ns: None,
+            appeal: None,
         });
         Event::AssertionDisputed {
             assertion_id,
@@ -177,7 +189,9 @@ impl Oracle {
     /// `response_body` is the exact response from NEAR AI Cloud, and
     /// `signed_text`, `signature` and `public_key` (hex) come from its
     /// signature endpoint. The first valid TRUE or FALSE verdict rules the
-    /// Assertion and opens the Appeal Window. Returns the verdict.
+    /// Assertion and opens the Appeal Window. An UNRESOLVABLE verdict, or a
+    /// verdict that differs from the first during the Appeal Window
+    /// (Conflicting Verdicts), sends it to Appeal. Returns the verdict.
     #[allow(clippy::too_many_arguments)]
     pub fn submit_ai_verdict(
         &mut self,
@@ -240,26 +254,27 @@ impl Oracle {
                 .any(|accepted| accepted.response_hash == response_hash),
             "This response is already recorded"
         );
-        // Until Appeal lands, only the first TRUE or FALSE verdict counts.
-        require!(
-            verdict != Verdict::Unresolvable,
-            "UNRESOLVABLE AI Verdicts are not supported yet"
-        );
-        require!(
-            matches!(assertion.state, AssertionState::Disputed),
-            "Assertion already has an AI Verdict"
-        );
+        let first = match assertion.state {
+            AssertionState::Disputed => None,
+            AssertionState::Ruled { .. } => {
+                require!(
+                    now < assertion.appeal_window_ends_at_ns().unwrap_or(0),
+                    "Appeal Window has ended"
+                );
+                let first = assertion.ai_verdicts[0].verdict;
+                require!(
+                    verdict != first,
+                    "This AI Verdict matches the one already accepted"
+                );
+                Some(first)
+            }
+            AssertionState::InAppeal => env::panic_str("Assertion is in Appeal"),
+            AssertionState::Asserted | AssertionState::Settled { .. } => env::abort(),
+        };
 
-        let appeal_window_ends_at_ns = now + self.config.appeal_window * NS_PER_SEC;
-        let outcome = verdict == Verdict::True;
-        let assertion = self
-            .assertions
-            .get_mut(&assertion_id)
-            .unwrap_or_else(|| env::abort());
-        assertion.state = AssertionState::Ruled { outcome };
-        if let Some(dispute) = assertion.dispute.as_mut() {
-            dispute.appeal_window_ends_at_ns = Some(appeal_window_ends_at_ns);
-        }
+        let appeal_window = self.config.appeal_window;
+        let dao_deadline = self.config.dao_deadline;
+        let assertion = self.assertion_mut(assertion_id);
         assertion.ai_verdicts.push(AcceptedVerdict {
             verdict,
             request_hash,
@@ -267,6 +282,17 @@ impl Oracle {
             public_key,
             accepted_at_ns: now,
         });
+        // Only the first TRUE or FALSE verdict opens the Appeal Window.
+        let opens_window = first.is_none() && verdict != Verdict::Unresolvable;
+        let appeal_window_ends_at_ns = opens_window.then(|| now + appeal_window * NS_PER_SEC);
+        if let Some(ends) = appeal_window_ends_at_ns {
+            assertion.state = AssertionState::Ruled {
+                outcome: verdict == Verdict::True,
+            };
+            if let Some(dispute) = assertion.dispute.as_mut() {
+                dispute.appeal_window_ends_at_ns = Some(ends);
+            }
+        }
         Event::AiVerdictAccepted {
             assertion_id,
             verdict,
@@ -274,9 +300,23 @@ impl Oracle {
             request_hash: hash::to_hex(&request_hash),
             response_hash: hash::to_hex(&response_hash),
             public_key: hash::to_hex(&public_key),
-            appeal_window_ends_at_ns: U64(appeal_window_ends_at_ns),
+            appeal_window_ends_at_ns: appeal_window_ends_at_ns.map(U64),
         }
         .emit();
+        match first {
+            Some(first) => {
+                Event::ConflictingVerdicts {
+                    assertion_id,
+                    verdicts: vec![first, verdict],
+                }
+                .emit();
+                assertion.start_appeal(assertion_id, AppealReason::Conflicting, now, dao_deadline);
+            }
+            None if verdict == Verdict::Unresolvable => {
+                assertion.start_appeal(assertion_id, AppealReason::Unresolvable, now, dao_deadline);
+            }
+            None => {}
+        }
         verdict
     }
 }
@@ -333,34 +373,6 @@ fn checked_content<'a>(
         asserter_evidence: asserter_evidence.as_deref().unwrap_or(""),
         disputer_evidence: disputer_evidence.as_deref().unwrap_or(""),
     }
-}
-
-/// Payouts for an Assertion settled with its AI Verdict: the winner gets their
-/// bond back plus half the loser's, the DAO the other half. An odd yoctoNEAR
-/// goes to the winner.
-pub(crate) fn ruled_payouts(assertion: &Assertion, outcome: bool, dao: &AccountId) -> Vec<Payout> {
-    let disputer = &assertion
-        .dispute
-        .as_ref()
-        .unwrap_or_else(|| env::abort())
-        .disputer;
-    let winner = if outcome {
-        &assertion.asserter
-    } else {
-        disputer
-    };
-    let bond = assertion.bond.as_yoctonear();
-    let dao_share = bond / 2;
-    vec![
-        Payout {
-            account_id: winner.clone(),
-            amount: NearToken::from_yoctonear(bond * 2 - dao_share),
-        },
-        Payout {
-            account_id: dao.clone(),
-            amount: NearToken::from_yoctonear(dao_share),
-        },
-    ]
 }
 
 /// The seed for an AI request: the first four bytes of the block's random seed.

@@ -2589,16 +2589,16 @@ name = "oracle"
 version = "0.1.0"
 dependencies = [
  "cargo-near-build",
- "k256",
  "ed25519-dalek",
  "hex",
+ "k256",
  "near-api",
  "near-sandbox",
  "near-sdk",
  "serde",
  "serde_json",
- "sha3 0.10.9",
  "sha2 0.10.9",
+ "sha3 0.10.9",
  "testresult",
  "tokio",
 ]
