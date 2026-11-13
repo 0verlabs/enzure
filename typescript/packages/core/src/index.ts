@@ -41,6 +41,7 @@ export {
   assertionTimeline,
   fetchAssertionEvents,
   nearRpcView,
+  timelineTransactions,
   type AiVerdictView,
   type DisputeView,
   type ExplorerOptions,

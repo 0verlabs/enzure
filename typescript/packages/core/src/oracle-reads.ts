@@ -293,3 +293,20 @@ function bytesToBase64(bytes: Uint8Array): string {
   for (const byte of bytes) binary += String.fromCharCode(byte);
   return btoa(binary);
 }
+
+/**
+ * The transaction hash behind each timeline step, or null for timers and for
+ * steps whose event isn't in `events` (yet). A step's event is the n-th event
+ * of its name, where n is the step's `index` (0 if it has none), so the second
+ * AI Verdict gets the second `ai_verdict_accepted`.
+ */
+export function timelineTransactions(
+  steps: readonly TimelineStep[],
+  events: readonly OracleEvent[],
+): (string | null)[] {
+  return steps.map((step) => {
+    if (!("event" in step)) return null;
+    const index = "index" in step ? step.index : 0;
+    return events.filter((event) => event.event === step.event)[index]?.transactionHash ?? null;
+  });
+}

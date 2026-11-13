@@ -8,8 +8,10 @@ import {
   fetchContent,
   nearRpcView,
   putContent,
-  type OracleAssertion,
+  timelineTransactions,
   type ExplorerTransaction,
+  type OracleAssertion,
+  type OracleEvent,
 } from "../src/index.ts";
 
 const ORACLE = "oracle-1794568696.enzure-evm-1794568684.testnet";
@@ -230,4 +232,38 @@ test("content whose bytes don't hash to the on-chain hash is marked as not match
   await expect(
     fetchContent({ storageUrl: "https://storage.example", fetch }, "ab".repeat(32)),
   ).resolves.toEqual({ status: "mismatch", text: "tampered" });
+});
+
+test("each timeline step that an event records gets that event's transaction", () => {
+  const event = (name: string, hash: string): OracleEvent => ({
+    event: name,
+    data: { assertion_id: 1 },
+    transactionHash: hash,
+    blockHeight: 1,
+  });
+  const events = [
+    event("assertion_posted", "tx-post"),
+    event("assertion_disputed", "tx-dispute"),
+    event("ai_verdict_accepted", "tx-verdict-1"),
+    event("ai_verdict_accepted", "tx-verdict-2"),
+  ];
+  const verdict = {
+    verdict: "TRUE",
+    request_hash: "",
+    response_hash: "",
+    public_key: "",
+    accepted_at_ns: "1",
+  };
+
+  expect(
+    timelineTransactions(
+      [
+        { kind: "posted", atNs: "1", event: "assertion_posted" },
+        { kind: "liveness", endsAtNs: "2", open: false },
+        { kind: "ai_verdict", atNs: "3", event: "ai_verdict_accepted", index: 1, verdict },
+        { kind: "settled", atNs: "4", event: "assertion_settled", outcome: true },
+      ],
+      events,
+    ),
+  ).toEqual(["tx-post", null, "tx-verdict-2", null]);
 });
