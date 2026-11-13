@@ -1,0 +1,29 @@
+{
+  "name": "@enzure/storage",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Hash-addressed storage for Claims and Evidence: a Hono Worker backed by R2 (ADR 0003).",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "postinstall": "cf workers types",
+    "dev": "cf dev",
+    "build": "cf build",
+    "deploy": "cf deploy",
+    "test": "vp test"
+  },
+  "dependencies": {
+    "@enzure/core": "workspace:*",
+    "@hono/zod-validator": "catalog:",
+    "hono": "catalog:",
+    "zod": "catalog:"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "catalog:",
+    "@cloudflare/vitest-plugin": "catalog:",
+    "@types/node": "catalog:",
+    "cf": "catalog:",
+    "typescript": "catalog:",
+    "vite-plus": "catalog:"
+  }
+}

@@ -23,7 +23,8 @@ contracts/evm/cache/
 contracts/evm/broadcast/*/31337/
 contracts/evm/broadcast/**/dry-run/
 
-# Cloudflare local state
+# Cloudflare local state and generated types
+.cloudflare/
 .wrangler/
 .mf/
 

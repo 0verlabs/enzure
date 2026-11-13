@@ -14,6 +14,7 @@ Run every test suite from the repository root with `./scripts/test.sh`. It needs
 | Foundry | 1.7.1 | Documented here; `scripts/test.sh` warns on a different version | `foundryup --install 1.7.1` |
 | solc | 0.8.30 | `contracts/evm/foundry.toml`; Foundry downloads it | Managed by Foundry |
 | forge-std | v1.17.0 | Git submodule at `contracts/evm/lib/forge-std` and `foundry.lock` | `git submodule update --init` |
+| Cloudflare CLI (`cf`) | 1.0.0-beta.30, with `@cloudflare/vite-plugin` 2.0.0-beta.v.15 and `@cloudflare/vitest-plugin` 1.8.0 | `typescript/pnpm-workspace.yaml` catalog | `vp install`; run it with `vp exec cf` in an app folder |
 
 Run Vite+ commands through `vp`, not a global `pnpm`: `vp install`, `vp check`, `vp test`.
 
