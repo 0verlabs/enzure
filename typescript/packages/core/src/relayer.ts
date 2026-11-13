@@ -363,15 +363,17 @@ export type RelayPassResult = {
  * One Relayer pass: reads the oracle's Assertions, and for each signed EVM
  * Hook for the wallet's chain reads its signed result and delivers it with
  * `relaySignedResult`. A failure on one Hook is reported and doesn't stop the
- * others. Results already recorded by the Receiver cost one read each.
+ * others. Results already recorded by the Receiver cost one read each. Pass
+ * `assertions` to reuse a listing made this pass instead of listing again.
  */
 export async function relayOnce(
   view: OracleView,
   clients: RelayerClients,
-  options: { pageSize?: number } = {},
+  options: { pageSize?: number; assertions?: readonly AssertionView[] } = {},
 ): Promise<RelayPassResult[]> {
   const chainId = await clients.publicClient.getChainId();
-  const hooks = evmHooksToRelay(await listAssertions(view, options), chainId);
+  const assertions = options.assertions ?? (await listAssertions(view, options));
+  const hooks = evmHooksToRelay(assertions, chainId);
   const results: RelayPassResult[] = [];
   for (const hook of hooks) {
     try {
