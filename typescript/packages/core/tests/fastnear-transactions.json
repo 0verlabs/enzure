@@ -1,0 +1,128 @@
+{
+  "source": "POST https://tx.test.fastnear.com/v0/transactions for the testnet oracle in fixtures/chain-signatures, trimmed to the fields core reads",
+  "transactions": [
+    {
+      "transaction": {
+        "hash": "7L9616LtNafhnKSo3God4NgtBi7wyhVp8fY3uzLywXFW",
+        "signer_id": "enzure-evm-1794568684.testnet",
+        "receiver_id": "oracle-1794568696.enzure-evm-1794568684.testnet"
+      },
+      "receipts": [
+        {
+          "execution_outcome": {
+            "block_height": 277503005,
+            "outcome": {
+              "executor_id": "oracle-1794568696.enzure-evm-1794568684.testnet",
+              "logs": [
+                "EVENT_JSON:{\"standard\":\"enzure\",\"version\":\"1.0.0\",\"event\":\"assertion_settled\",\"data\":{\"assertion_id\":1,\"outcome\":true,\"payouts\":[{\"account_id\":\"enzure-evm-1794568684.testnet\",\"amount\":\"1000000000000000000000000\"}]}}"
+              ]
+            }
+          }
+        },
+        {
+          "execution_outcome": {
+            "block_height": 277503006,
+            "outcome": {
+              "executor_id": "enzure-evm-1794568684.testnet",
+              "logs": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "transaction": {
+        "hash": "88cENuoWxg8A1Kjcf2jzJe44dZhx5cVoaL9fpYfyhfTD",
+        "signer_id": "enzure-evm-1794568684.testnet",
+        "receiver_id": "oracle-1794568696.enzure-evm-1794568684.testnet"
+      },
+      "receipts": [
+        {
+          "execution_outcome": {
+            "block_height": 277503039,
+            "outcome": {
+              "executor_id": "oracle-1794568696.enzure-evm-1794568684.testnet",
+              "logs": []
+            }
+          }
+        },
+        {
+          "execution_outcome": {
+            "block_height": 277503040,
+            "outcome": {
+              "executor_id": "enzure-evm-1794568684.testnet",
+              "logs": []
+            }
+          }
+        },
+        {
+          "execution_outcome": {
+            "block_height": 277503040,
+            "outcome": {
+              "executor_id": "enzure-evm-1794568684.testnet",
+              "logs": []
+            }
+          }
+        },
+        {
+          "execution_outcome": {
+            "block_height": 277503041,
+            "outcome": {
+              "executor_id": "enzure-evm-1794568684.testnet",
+              "logs": []
+            }
+          }
+        },
+        {
+          "execution_outcome": {
+            "block_height": 277503041,
+            "outcome": {
+              "executor_id": "oracle-1794568696.enzure-evm-1794568684.testnet",
+              "logs": [
+                "EVENT_JSON:{\"standard\":\"enzure\",\"version\":\"1.0.0\",\"event\":\"withdrawal\",\"data\":{\"account_id\":\"enzure-evm-1794568684.testnet\",\"amount\":\"1000000000000000000000000\"}}"
+              ]
+            }
+          }
+        },
+        {
+          "execution_outcome": {
+            "block_height": 277503042,
+            "outcome": {
+              "executor_id": "enzure-evm-1794568684.testnet",
+              "logs": []
+            }
+          }
+        }
+      ]
+    },
+    {
+      "transaction": {
+        "hash": "J8NNKZoqCXj3uPhwMa1HjojCgRNRvrqJHagaz8j2x9Vs",
+        "signer_id": "enzure-evm-1794568684.testnet",
+        "receiver_id": "oracle-1794568696.enzure-evm-1794568684.testnet"
+      },
+      "receipts": [
+        {
+          "execution_outcome": {
+            "block_height": 277502899,
+            "outcome": {
+              "executor_id": "oracle-1794568696.enzure-evm-1794568684.testnet",
+              "logs": [
+                "EVENT_JSON:{\"standard\":\"enzure\",\"version\":\"1.0.0\",\"event\":\"assertion_posted\",\"data\":{\"assertion_id\":1,\"asserter\":\"enzure-evm-1794568684.testnet\",\"claim_hash\":\"64a5dddb88128a31ba9a3c719b73d55160a125423dff298529c354abb204dd2a\",\"evidence_hash\":null,\"bond\":\"1000000000000000000000000\",\"liveness_ends_at_ns\":\"1794568775561325767\"}}"
+              ]
+            }
+          }
+        },
+        {
+          "execution_outcome": {
+            "block_height": 277502900,
+            "outcome": {
+              "executor_id": "enzure-evm-1794568684.testnet",
+              "logs": []
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

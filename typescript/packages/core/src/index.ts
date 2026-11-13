@@ -37,6 +37,27 @@ export {
   type ResultMessage,
 } from "./result-message.ts";
 export {
+  assertionEvents,
+  assertionTimeline,
+  fetchAssertionEvents,
+  nearRpcView,
+  timelineTransactions,
+  type AiVerdictView,
+  type DisputeView,
+  type ExplorerOptions,
+  type ExplorerTransaction,
+  type NearRpcOptions,
+  type OracleAssertion,
+  type OracleEvent,
+  type TimelineStep,
+} from "./oracle-reads.ts";
+export {
+  fetchContent,
+  putContent,
+  type FetchedContent,
+  type StorageOptions,
+} from "./storage-client.ts";
+export {
   RECEIVER_ABI,
   SIGN_HOOK_DEPOSIT_YOCTO,
   SIGN_HOOK_GAS,
