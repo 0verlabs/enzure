@@ -326,9 +326,11 @@ test("an Appeal the DAO left past its deadline shows the deadline passed, then t
     },
   };
 
-  expect(assertionTimeline(overdue, 1_800_000_000_000n).slice(4).map((step) => step.kind)).toEqual(
-    ["dao_deadline", "settled"],
-  );
+  expect(
+    assertionTimeline(overdue, 1_800_000_000_000n)
+      .slice(4)
+      .map((step) => step.kind),
+  ).toEqual(["dao_deadline", "settled"]);
 });
 
 test("an Assertion's events are read from the explorer: its transaction list, then the transactions", async () => {
@@ -451,7 +453,13 @@ test("a Hook step gets the latest transaction of its event for that Hook", () =>
   expect(
     timelineTransactions(
       [
-        { kind: "near_hook", hookIndex: 0, consumer: "c", status: "failed", event: "near_hook_failed" },
+        {
+          kind: "near_hook",
+          hookIndex: 0,
+          consumer: "c",
+          status: "failed",
+          event: "near_hook_failed",
+        },
         {
           kind: "evm_hook",
           hookIndex: 2,

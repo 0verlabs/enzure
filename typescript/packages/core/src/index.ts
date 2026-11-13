@@ -91,6 +91,7 @@ export {
   type SignedResultView,
 } from "./relayer.ts";
 export { SCHEDULER_GAS, dueCalls, type DueCall, type DueCallOptions } from "./scheduler.ts";
+export { fetchEvmDelivery, type EvmDelivery, type EvmDeliveryOptions } from "./evm-delivery.ts";
 export {
   NEAR_AI_URL,
   SUBMIT_AI_VERDICT_GAS,

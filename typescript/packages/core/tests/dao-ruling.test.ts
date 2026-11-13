@@ -33,7 +33,7 @@ test("a ruling not sent through the oracle's DAO names no proposal", () => {
 function fakeExplorer() {
   const requests: Array<{ path: string; body: Record<string, unknown> }> = [];
   const fetch = async (url: string | URL | Request, init?: RequestInit) => {
-    const path = new URL(url.toString()).pathname;
+    const path = new URL(url instanceof Request ? url.url : url).pathname;
     const body = JSON.parse(init!.body as string);
     requests.push({ path, body });
     if (path === "/v0/account") {

@@ -441,7 +441,11 @@ export function daoProposalId(event: OracleEvent, dao: string): number | null {
  */
 export async function fetchProposalTransaction(
   { apiUrl, contractId: dao, fetch = globalThis.fetch }: ExplorerOptions,
-  { proposalId, sinceNs, maxBlockHeight }: { proposalId: number; sinceNs: string; maxBlockHeight: number },
+  {
+    proposalId,
+    sinceNs,
+    maxBlockHeight,
+  }: { proposalId: number; sinceNs: string; maxBlockHeight: number },
 ): Promise<ProposalTransaction | null> {
   const explorer = explorerApi(apiUrl, fetch);
   const hashes = await explorer.accountTransactionHashes(dao, {
@@ -565,8 +569,8 @@ export function timelineTransactions(
     const named = events.filter((event) => event.event === step.event);
     if ("hookIndex" in step) {
       return (
-        named.filter((event) => event.data.hook_index === step.hookIndex).at(-1)
-          ?.transactionHash ?? null
+        named.filter((event) => event.data.hook_index === step.hookIndex).at(-1)?.transactionHash ??
+        null
       );
     }
     const index = "index" in step ? step.index : 0;
