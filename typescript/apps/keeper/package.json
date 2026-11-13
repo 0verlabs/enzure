@@ -2,12 +2,15 @@
   "name": "@enzure/keeper",
   "version": "0.0.0",
   "private": true,
-  "description": "The Keeper service: the Resolver, Scheduler and Relayer in one long-lived Node process on a Render background worker.",
+  "description": "The Keeper service: the Resolver, Scheduler and Relayer, run by a Durable Object alarm on Cloudflare Workers.",
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "build": "vp pack",
+    "postinstall": "cf workers types",
+    "build": "vp pack && cf build",
     "start": "node dist/main.mjs",
+    "dev": "cf dev",
+    "deploy": "cf deploy",
     "test": "vp test"
   },
   "dependencies": {
@@ -17,7 +20,9 @@
     "zod": "catalog:"
   },
   "devDependencies": {
+    "@cloudflare/vite-plugin": "catalog:",
     "@types/node": "catalog:",
+    "cf": "catalog:",
     "typescript": "catalog:",
     "vite-plus": "catalog:"
   }

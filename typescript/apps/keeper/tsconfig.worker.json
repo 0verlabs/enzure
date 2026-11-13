@@ -1,0 +1,29 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "target": "es2024",
+    "lib": ["es2024"],
+    "module": "preserve",
+    "moduleResolution": "bundler",
+    "types": [],
+    "paths": {
+      "@enzure/core": ["../../packages/core/src/index.ts"]
+    },
+    "strict": true,
+    "noUnusedLocals": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true
+  },
+  "include": [
+    "src/worker.ts",
+    "src/keeper.ts",
+    "src/config.ts",
+    "src/chains.ts",
+    "cloudflare.config.ts",
+    ".cloudflare/types",
+    "../../packages/core/src"
+  ]
+}
