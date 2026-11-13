@@ -1,6 +1,7 @@
 import { canAppeal, type OracleAssertion } from "@enzure/core";
 import { createFileRoute, notFound, useRouter } from "@tanstack/react-router";
 import { useEffect } from "react";
+import { z } from "zod";
 import { Account, Countdown, StateBadge, useNowNs } from "@/components/assertion-bits";
 import { AppealCard } from "@/components/appeal-card";
 import { ContentCard } from "@/components/content-card";
@@ -14,11 +15,17 @@ import { useWallet } from "@/lib/wallet";
 /** How often an Assertion still moving (unsettled, or with a Hook in flight) re-reads the contract. */
 const REFRESH_MS = 15_000;
 
+/** The `$id` path segment: an Assertion id, a positive integer written in digits. */
+const AssertionParams = z.object({
+  id: z.string().regex(/^\d+$/).transform(Number).pipe(z.number().int().positive()),
+});
+
 export const Route = createFileRoute("/assertions/$id")({
   params: {
-    parse: ({ id }) => {
-      if (!/^\d+$/.test(id)) throw notFound();
-      return { id: Number(id) };
+    parse: (raw) => {
+      const parsed = AssertionParams.safeParse(raw);
+      if (!parsed.success) throw notFound();
+      return parsed.data;
     },
     stringify: ({ id }) => ({ id: String(id) }),
   },

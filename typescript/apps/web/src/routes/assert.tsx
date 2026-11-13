@@ -1,6 +1,7 @@
 import { putContent } from "@enzure/core";
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, type FormEvent } from "react";
+import { useMemo, useState, type FormEvent } from "react";
+import { z } from "zod";
 import { ErrorAlert } from "@/components/error-alert";
 import { ContentField } from "@/components/content-field";
 import { Button } from "@/components/ui/button";
@@ -12,7 +13,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Field, FieldDescription, FieldGroup, FieldLabel } from "@/components/ui/field";
+import { Field, FieldDescription, FieldError, FieldGroup, FieldLabel } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Spinner } from "@/components/ui/spinner";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
@@ -29,6 +30,37 @@ const LIVENESS = [
   { label: "2 hours", seconds: 7200 },
   { label: "1 day", seconds: 86_400 },
 ] as const;
+
+/** The contract's Liveness bounds, in seconds: 1 minute to 7 days. */
+const MIN_LIVENESS_SECS = 60;
+const MAX_LIVENESS_SECS = 7 * 24 * 60 * 60;
+
+/**
+ * The post form, checked before anything is uploaded or signed. The Claim and
+ * Evidence are kept exactly as typed, since their bytes are what gets hashed;
+ * the bond becomes yoctoNEAR and must be at least `minBond` when it is known.
+ */
+function postForm(minBond: string | null) {
+  return z.object({
+    claim: z.string().refine((text) => text.trim() !== "", "Write a Claim"),
+    evidence: z.string(),
+    bond: z
+      .string()
+      .transform((near, ctx) => {
+        const yocto = nearToYocto(near);
+        if (yocto === null) {
+          ctx.addIssue({ code: "custom", message: "Enter an amount of NEAR, such as 1.5" });
+          return z.NEVER;
+        }
+        return yocto;
+      })
+      .refine(
+        (yocto) => minBond === null || BigInt(yocto) >= BigInt(minBond),
+        "The bond is below the oracle's minimum",
+      ),
+    liveness: z.coerce.number().int().min(MIN_LIVENESS_SECS).max(MAX_LIVENESS_SECS),
+  });
+}
 
 export const Route = createFileRoute("/assert")({
   loader: async () =>
@@ -51,26 +83,24 @@ function PostAssertion() {
   const [step, setStep] = useState<Step>("idle");
   const [error, setError] = useState<unknown>(null);
 
-  const bondYocto = nearToYocto(bond);
-  const tooSmall = bondYocto !== null && minBond !== null && BigInt(bondYocto) < BigInt(minBond);
+  const form = useMemo(() => postForm(minBond), [minBond]);
+  const parsed = form.safeParse({ claim, evidence, bond, liveness });
+  const bondIssue = parsed.success
+    ? undefined
+    : parsed.error.issues.find((issue) => issue.path[0] === "bond");
   const busy = step !== "idle";
-  const canSubmit =
-    !busy &&
-    !!wallet.accountId &&
-    claim.trim() !== "" &&
-    bondYocto !== null &&
-    !tooSmall &&
-    missingConfig.length === 0;
+  const canSubmit = !busy && !!wallet.accountId && parsed.success && missingConfig.length === 0;
 
   async function submit(event: FormEvent) {
     event.preventDefault();
-    if (!canSubmit || bondYocto === null) return;
+    if (!canSubmit || !parsed.success) return;
+    const post = parsed.data;
     setError(null);
     try {
       setStep("uploading");
       const storage = { storageUrl: config.storageUrl };
-      const claimHash = await putContent(storage, claim);
-      const evidenceHash = evidence === "" ? null : await putContent(storage, evidence);
+      const claimHash = await putContent(storage, post.claim);
+      const evidenceHash = post.evidence === "" ? null : await putContent(storage, post.evidence);
       const storageDeposit = await oracle.assertionStorageDeposit();
 
       setStep("signing");
@@ -79,11 +109,11 @@ function PostAssertion() {
         args: {
           claim_hash: claimHash,
           evidence_hash: evidenceHash,
-          bond: bondYocto,
-          liveness: Number(liveness),
+          bond: post.bond,
+          liveness: post.liveness,
           hooks: [],
         },
-        deposit: (BigInt(bondYocto) + BigInt(storageDeposit)).toString(),
+        deposit: (BigInt(post.bond) + BigInt(storageDeposit)).toString(),
         gas: CALL_GAS,
       });
       await navigate({ to: "/assertions/$id", params: { id: Number(value) } });
@@ -122,14 +152,14 @@ function PostAssertion() {
               onChange={setEvidence}
               disabled={busy}
             />
-            <Field data-invalid={tooSmall || bondYocto === null || undefined}>
+            <Field data-invalid={bondIssue ? true : undefined}>
               <FieldLabel htmlFor="bond">Bond (NEAR)</FieldLabel>
               <Input
                 id="bond"
                 inputMode="decimal"
                 value={bond}
                 onChange={(event) => setBond(event.target.value)}
-                aria-invalid={tooSmall || bondYocto === null || undefined}
+                aria-invalid={bondIssue ? true : undefined}
                 disabled={busy}
                 className="max-w-40"
               />
@@ -137,6 +167,7 @@ function PostAssertion() {
                 {minBond ? `At least ${formatNear(minBond)}. ` : ""}A Disputer must match it. The
                 storage deposit is added on top.
               </FieldDescription>
+              {bondIssue ? <FieldError>{bondIssue.message}</FieldError> : null}
             </Field>
             <Field>
               <FieldLabel>Liveness</FieldLabel>
