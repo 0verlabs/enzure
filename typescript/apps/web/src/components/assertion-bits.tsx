@@ -2,7 +2,7 @@ import type { AssertionState, OracleAssertion } from "@enzure/core";
 import { ExternalLinkIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
-import { transactionUrl } from "@/config";
+import { accountUrl, evmTransactionUrl, transactionUrl } from "@/config";
 import { shortHash } from "@/lib/oracle";
 
 const STATE_LABELS: Record<AssertionState, string> = {
@@ -67,11 +67,33 @@ export function Countdown({ endsAtNs, ended = "ended" }: { endsAtNs: string; end
   return <span className="tabular-nums">{timeLeft(endsAtNs, now) ?? ended}</span>;
 }
 
-/** A link to a NEAR transaction in the explorer. */
-export function TxLink({ hash }: { hash: string }) {
+export function Account({ id }: { id: string }) {
   return (
     <a
-      href={transactionUrl(hash)}
+      href={accountUrl(id)}
+      target="_blank"
+      rel="noreferrer"
+      className="underline-offset-4 hover:underline"
+    >
+      {id}
+    </a>
+  );
+}
+
+/** A link to a NEAR transaction in the explorer. */
+export function TxLink({ hash }: { hash: string }) {
+  return <HashLink href={transactionUrl(hash)} hash={hash} />;
+}
+
+/** A link to a transaction on the EVM chain (Base Sepolia) in its explorer. */
+export function EvmTxLink({ hash }: { hash: string }) {
+  return <HashLink href={evmTransactionUrl(hash)} hash={hash} />;
+}
+
+function HashLink({ href, hash }: { href: string; hash: string }) {
+  return (
+    <a
+      href={href}
       target="_blank"
       rel="noreferrer"
       className="inline-flex items-center gap-1 font-mono text-xs text-muted-foreground hover:text-foreground"

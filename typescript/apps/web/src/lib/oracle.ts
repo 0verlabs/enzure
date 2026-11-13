@@ -1,4 +1,4 @@
-import { nearRpcView, type OracleAssertion } from "@enzure/core";
+import { nearRpcView, type OracleAssertion, type SignedResultView } from "@enzure/core";
 import { config } from "@/config";
 import { yoctoToNear } from "@/lib/near-amount";
 
@@ -19,10 +19,18 @@ export const oracle = {
   getBalance: (accountId: string) => view<string>("get_balance", { account_id: accountId }),
   assertionStorageDeposit: () => view<string>("assertion_storage_deposit", { hooks: 0 }),
   disputeStorageDeposit: () => view<string>("dispute_storage_deposit", {}),
+  getSignedResult: (assertionId: number, hookIndex: number) =>
+    view<SignedResultView | null>("get_signed_result", {
+      assertion_id: assertionId,
+      hook_index: hookIndex,
+    }),
 };
 
-/** Gas for oracle calls: enough for `assert_claim`, `dispute` and `withdraw` with their refunds. */
+/** Gas for oracle calls: enough for `assert_claim`, `dispute`, `appeal` and `withdraw` with their refunds. */
 export const CALL_GAS = "100000000000000";
+
+/** Gas for `retry_near_hook`: the Hook's own gas (at most 50 TGas) plus the oracle's callback. */
+export const RETRY_HOOK_GAS = "300000000000000";
 
 /** `1.25 NEAR` for a yoctoNEAR amount. */
 export function formatNear(yocto: string | bigint, decimals = 4): string {
