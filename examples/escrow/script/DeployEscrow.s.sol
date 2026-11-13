@@ -16,11 +16,12 @@ contract DeployEscrow is Script {
     function run() external returns (Escrow escrow) {
         address receiver = vm.envAddress("RECEIVER_ADDRESS");
         address token = vm.envOr("USDC_ADDRESS", address(0));
+        uint256 key = vm.envUint("EVM_PRIVATE_KEY");
 
-        vm.startBroadcast(vm.envUint("EVM_PRIVATE_KEY"));
+        vm.startBroadcast(key);
         if (token == address(0)) {
             TestUSDC testUsdc = new TestUSDC();
-            testUsdc.mint(msg.sender, vm.envOr("TEST_USDC_MINT", uint256(1000e6)));
+            testUsdc.mint(vm.addr(key), vm.envOr("TEST_USDC_MINT", uint256(1000e6)));
             token = address(testUsdc);
         }
         escrow = new Escrow(token, receiver);
