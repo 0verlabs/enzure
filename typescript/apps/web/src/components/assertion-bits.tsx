@@ -1,11 +1,11 @@
-import type { OracleAssertion } from "@enzure/core";
+import type { AssertionState, OracleAssertion } from "@enzure/core";
 import { ExternalLinkIcon } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { transactionUrl } from "@/config";
 import { shortHash } from "@/lib/oracle";
 
-const STATE_LABELS: Record<string, string> = {
+const STATE_LABELS: Record<AssertionState, string> = {
   asserted: "In Liveness",
   disputed: "Disputed",
   ruled: "Ruled",

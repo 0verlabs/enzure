@@ -168,7 +168,8 @@ export function assertionTimeline(assertion: OracleAssertion, nowNs: bigint): Ti
     steps.push({
       kind: "appeal_window",
       endsAtNs: assertion.appeal_window_ends_at_ns,
-      open: !settled && nowNs < BigInt(assertion.appeal_window_ends_at_ns),
+      // Only a ruled Assertion can still be appealed; an Appeal or settlement closes the window.
+      open: assertion.state === "ruled" && nowNs < BigInt(assertion.appeal_window_ends_at_ns),
     });
   }
   if (settled && assertion.settled_at_ns && assertion.outcome !== null) {

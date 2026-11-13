@@ -176,6 +176,48 @@ test("a ruled and settled Assertion's timeline lists each step in order", () => 
   });
 });
 
+test("an appealed Assertion's timeline shows the Appeal Window closed and no settlement", () => {
+  const appealed: OracleAssertion = {
+    ...posted,
+    state: "in_appeal",
+    dispute: {
+      disputer: "bob.testnet",
+      evidence_hash: null,
+      seed: 7,
+      disputed_at_ns: "1010000000000",
+      ai_verdict_deadline_ns: "4610000000000",
+    },
+    ai_verdicts: [
+      {
+        verdict: "TRUE",
+        request_hash: "cc".repeat(32),
+        response_hash: "dd".repeat(32),
+        public_key: "ee".repeat(32),
+        accepted_at_ns: "1020000000000",
+      },
+    ],
+    appeal_window_ends_at_ns: "1100000000000",
+    appeal: {
+      reason: "appealed",
+      appellant: "bob.testnet",
+      appeal_bond: "1000000000000000000000000",
+      started_at_ns: "1050000000000",
+      dao_deadline_ns: "605850000000000",
+    },
+  };
+
+  const steps = assertionTimeline(appealed, 1_060_000_000_000n);
+
+  expect(steps.map((step) => step.kind)).toEqual([
+    "posted",
+    "liveness",
+    "disputed",
+    "ai_verdict",
+    "appeal_window",
+  ]);
+  expect(steps.at(-1)).toEqual({ kind: "appeal_window", endsAtNs: "1100000000000", open: false });
+});
+
 test("an Assertion's events are read from the explorer: its transaction list, then the transactions", async () => {
   const { fetch, calls } = fakeFetch(({ url }) =>
     url.endsWith("/v0/account")
