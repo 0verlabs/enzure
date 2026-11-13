@@ -2,7 +2,7 @@
 
 # Enzure
 
-Enzure is an AI optimistic oracle on NEAR. Anyone posts a bonded statement (an **Assertion**). If nobody disputes it, it settles TRUE. If someone disputes it, a NEAR AI Cloud model running in a TEE rules on it, and the NEAR contract checks the model's signature itself. The losing side can appeal to a Sputnik DAO. When the Assertion settles, the outcome is delivered to contracts on NEAR, or signed through Chain Signatures and delivered to contracts on EVM chains with no bridge.
+Enzure is an optimistic oracle on NEAR for the promises a contract can't check by itself. Anyone posts a bonded statement (an **Assertion**). If nobody disputes it, it settles TRUE. If someone disputes it, a NEAR AI Cloud model running in a TEE rules on it, and the NEAR contract checks the model's signature itself. The losing side can appeal to a Sputnik DAO. When the Assertion settles, the outcome is delivered to contracts on NEAR, or signed through Chain Signatures and delivered to contracts on EVM chains with no bridge.
 
 The demo is an escrow for agent work: a buyer funds a job in test USDC, a seller agent does the work with NEAR AI and asserts that it matches the brief, the buyer disputes, the AI rules, and the escrow pays the seller or refunds the buyer.
 

@@ -1,6 +1,6 @@
 [package]
 name = "oracle"
-description = "Enzure AI optimistic oracle"
+description = "Enzure optimistic oracle"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
