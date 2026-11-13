@@ -171,7 +171,7 @@ Open http://localhost:3000. The storage service's CORS list allows ports 3000 an
 
 Connect a NEAR testnet wallet to post (`/assert`), dispute, Appeal and withdraw. Details: [`typescript/apps/web/README.md`](typescript/apps/web/README.md).
 
-`./scripts/deploy-web.sh` deploys it as the Worker `enzure-web` with Cloudflare credentials.
+`./scripts/deploy-web.sh` deploys it as the Worker `enzure-web` with Cloudflare credentials; `./scripts/deploy-web.sh mainnet` deploys `enzure-web-mainnet` from `.env.mainnet`. Every deploy script takes `testnet` (the default) or `mainnet` this way ([`scripts/README.md`](scripts/README.md)).
 
 ## Deployed accounts and addresses
 

@@ -38,9 +38,10 @@ cd apps/storage && vp exec cf dev   # local server with local R2
 ## Deploy
 
 ```bash
-./scripts/deploy-storage.sh      # from the repository root
+./scripts/deploy-storage.sh           # from the repository root; testnet: enzure-storage, bucket enzure-content
+./scripts/deploy-storage.sh mainnet   # mainnet: enzure-storage-mainnet, bucket enzure-content-mainnet
 ```
 
-The script reads `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` from the environment or the root `.env`, which is not committed. The token needs Workers Scripts and R2 edit permissions. Without a token, `cf` uses a `cf auth login` session. The first deploy creates the R2 bucket.
+The network is the `cf deploy --mode` that `cloudflare.config.ts` reads; every mode except `mainnet` is testnet. Each network has its own Worker, R2 bucket, rate-limit namespace (3001 testnet, 3002 mainnet) and CORS entry for its web app. The script reads `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` from the environment or the root `.env`, which is not committed. The token needs Workers Scripts and R2 edit permissions. Without a token, `cf` uses a `cf auth login` session. The first deploy to a network creates its R2 bucket.
 
 Upload and download from the command line with `scripts/storage-upload.sh` and `scripts/storage-download.sh`.

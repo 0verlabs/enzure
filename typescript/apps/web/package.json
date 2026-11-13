@@ -9,7 +9,9 @@
     "postinstall": "cf workers types",
     "dev": "cf dev",
     "build": "cf build",
-    "deploy": "cf deploy"
+    "deploy": "cf deploy",
+    "deploy:testnet": "vp build --mode testnet && cf deploy --prebuilt --mode testnet",
+    "deploy:mainnet": "vp build --mode mainnet && cf deploy --prebuilt --mode mainnet"
   },
   "dependencies": {
     "@enzure/core": "workspace:*",
