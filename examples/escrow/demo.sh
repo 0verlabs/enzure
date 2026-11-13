@@ -54,8 +54,8 @@ source "$root/scripts/lib/near.sh"
 
 outcome_wanted="${1:-paid}"
 case "$outcome_wanted" in
-  paid) off_brief=() ;;
-  refunded) off_brief=(--off-brief) ;;
+  paid) off_brief="" ;;
+  refunded) off_brief="--off-brief" ;;
   *) echo "usage: $0 [paid|refunded]" >&2; exit 2 ;;
 esac
 
@@ -74,7 +74,7 @@ export EVM_RPC_URL="${EVM_RPC_URL:-https://sepolia.base.org}"
 export STORAGE_URL="${STORAGE_URL:-https://enzure-storage.luckzivanius.workers.dev}"
 liveness="${LIVENESS_SECS:-60}"
 amount="${AMOUNT:-1}"
-brief="${BRIEF:-Write a haiku about a lighthouse at night. It must have exactly three lines and use the word \"beam\".}"
+brief="${BRIEF:-Write a short poem about a lighthouse at night. It must have exactly three lines and use the word \"beam\".}"
 keeper="$root/typescript/apps/keeper/dist/main.mjs"
 if [ -z "${NO_KEEPER:-}" ] && [ ! -f "$keeper" ]; then
   echo "error: build the Keeper first: (cd typescript && vp install && vp run --filter @enzure/keeper build)" >&2
@@ -152,7 +152,7 @@ add_links <<<"$job_json"
 printf 'Claim:\n%s\n' "$(json_field claim <<<"$job_json")" >&2
 
 step "Seller agent: producing the deliverable and posting the Assertion"
-seller_json="$(agent seller --job "$job_id" --liveness "$liveness" "${off_brief[@]}")"
+seller_json="$(agent seller --job "$job_id" --liveness "$liveness" ${off_brief:+"$off_brief"})"
 assertion_id="$(json_field assertion_id <<<"$seller_json")"
 add_links <<<"$seller_json"
 

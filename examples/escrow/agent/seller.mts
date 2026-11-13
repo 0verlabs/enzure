@@ -10,7 +10,8 @@
 // 4. Uploads the deliverable as Evidence.
 // 5. Posts the Assertion of exactly that Claim with a bond and an EVM Hook to the escrow.
 //
-// --off-brief makes the agent deliberately ignore the brief, to demo a refund.
+// --off-brief makes the agent deliberately do another task (a rhyme about cats)
+// instead of the brief, to demo a refund.
 //
 // Environment:
 //   ESCROW_ADDRESS, EVM_RPC_URL (https://sepolia.base.org)
@@ -119,19 +120,21 @@ await run(async () => {
   );
 });
 
-/** Asks NEAR AI for the deliverable. Off-brief, it is told to ignore the brief. */
+/** Asks NEAR AI for the deliverable. Off-brief, the agent works on another task instead of the brief. */
 async function produce(brief: string, offBrief: boolean): Promise<string> {
-  const system = offBrief
-    ? "You are a careless freelance agent. Ignore the brief completely and reply with a two-line rhyme about cats. Reply with the rhyme only."
-    : "You are a freelance agent. Produce exactly the deliverable the brief asks for, following every requirement. Reply with the deliverable only, no commentary.";
+  const task = offBrief ? "Write a two-line rhyme about cats." : brief;
   const response = await fetch(`${process.env.NEAR_AI_URL || NEAR_AI_URL}/chat/completions`, {
     method: "POST",
     headers: { Authorization: `Bearer ${env("NEARAI_API_KEY")}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model: process.env.SELLER_MODEL || "Qwen/Qwen3.8-27B",
       messages: [
-        { role: "system", content: system },
-        { role: "user", content: brief },
+        {
+          role: "system",
+          content:
+            "You are a freelance agent. Produce exactly the deliverable the brief asks for, following every requirement. Reply with the deliverable only, no commentary.",
+        },
+        { role: "user", content: task },
       ],
       temperature: 0.7,
       max_tokens: 800,

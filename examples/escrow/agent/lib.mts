@@ -142,7 +142,8 @@ export function near(accountId: string, privateKey: string) {
       return { value, tx: `${explorer}${outcome.transaction.hash}` };
     },
     view<T>(oracle: string, method: string, args: object = {}) {
-      return client.view<T>(oracle, method, args) as Promise<T>;
+      // Optimistic, so an Assertion this script just posted is already visible.
+      return client.view<T>(oracle, method, args, { finality: "optimistic" }) as Promise<T>;
     },
   };
 }
