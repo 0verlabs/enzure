@@ -19,6 +19,7 @@ export const signedResponse = JSON.parse(
   };
   input: { claim: string; asserter_evidence: string; disputer_evidence: string; seed: number };
   model_id: string;
+  chat_id: string;
   request_body: string;
   response_body: string;
   request_hash: string;

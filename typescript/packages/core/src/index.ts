@@ -68,3 +68,14 @@ export {
   type DueCallOptions,
   type OracleAssertion,
 } from "./scheduler.ts";
+export {
+  NEAR_AI_URL,
+  SUBMIT_AI_VERDICT_GAS,
+  createResolver,
+  prepareAiVerdict,
+  type OracleCall,
+  type ResolveResult,
+  type ResolverOptions,
+  type ResolverPassResult,
+  type SubmitAiVerdictArgs,
+} from "./resolver.ts";

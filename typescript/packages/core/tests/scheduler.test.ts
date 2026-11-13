@@ -95,9 +95,9 @@ test("a disputed Assertion with no AI Verdict is due for check_timeout once the 
   expect(
     dueCalls(assertions, { nowNs: T0 + 3_610n * SEC - 1n, aiVerdictDeadlineSecs: 3_600 }),
   ).toEqual([]);
-  expect(dueCalls(assertions, { nowNs: T0 + 3_610n * SEC, aiVerdictDeadlineSecs: 3_600 })).toEqual(
-    [timeout],
-  );
+  expect(dueCalls(assertions, { nowNs: T0 + 3_610n * SEC, aiVerdictDeadlineSecs: 3_600 })).toEqual([
+    timeout,
+  ]);
 });
 
 test("check_timeout is never due while the oracle has no AI Verdict deadline", () => {
