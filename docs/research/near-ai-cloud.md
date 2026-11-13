@@ -173,7 +173,7 @@ Submit to `security`, `privacy`, and `open`. Add `agents` only if the watcher bo
    - `submit_ai_verdict(id, request_body, response_body, text, sig, chat_id)`: sha256 checks, `ed25519_verify` against the registered key, enum parsing.
    - A short counter-verdict window, `escalate()` to an owner/DAO account, and `settle()` that pays out bonds.
 2. `register_signer` controlled by the owner (Option A), plus a script that runs the full off-chain attestation check (dcap-qvl + NRAS) and commits the JSON report.
-3. Relayer/bot (Node + `@nearai/inference-sdk` or plain fetch): watches events, calls `z-ai/glm-5.3-flash` non-streaming with `x-no-aliasing: true`, fetches the signature, and submits it.
+3. Resolver (Node + `@nearai/inference-sdk` or plain fetch): watches events, calls the Prompt Template's model (`Qwen/Qwen3.8-27B`, see §7) non-streaming with `x-no-aliasing: true`, fetches the signature, and submits it.
 4. Demo UI: assertion list, dispute button, AI verdict with a "Verified on-chain" badge linking to the transaction, and a red-team example where an injected claim gets `UNRESOLVABLE` and is escalated.
 
 **Stub or mention in the README:**
@@ -181,15 +181,60 @@ Submit to `security`, `privacy`, and `open`. Add `agents` only if the watcher bo
 - Chain Signatures push of results to an EVM chain. Either sign the outcome with `v1.signer-prod.testnet` and verify it on Sepolia, or show a mock.
 - k-model jury, sealed evidence (E2EE), and a real Sputnik DAO as tier 2. A plain owner account can stand in for now.
 
-**Day-1 checks before relying on the design:**
+**Day-1 checks before relying on the design:** all three passed on 2026-11-13; see §7.
 1. A non-streaming gateway chat completion with the canonical ID and `x-no-aliasing` returns `signature_kind: provider_tee`, and `sha256(our exact body) == request_hash`. This confirms the gateway forwards the request bytes unchanged. If it does not, use the direct `{slug}.completions.near.ai` endpoint (experimental) or accept a `gateway` signature and register the gateway key.
 2. Size of the response bytes with thinking off and structured output on.
 3. Confirm the signature can be fetched with an API key, and how long that takes.
+
+## 7. Signing check results and the model for Prompt Template v1
+
+Checked on 2026-11-13 with `scripts/check-near-ai-signing.mts` (issue #2). The signed response it captured is `fixtures/near-ai-cloud/signed-response.json`.
+
+**Result: NEAR AI Cloud signs exactly what the contract will check.** A non-streamed request through `cloud-api.near.ai` with the canonical model id and `x-no-aliasing: true` returned:
+- `signature_kind: provider_tee` and `signing_algo: ed25519`.
+- Signed text `model_id:sha256(request bytes):sha256(response bytes)`, matching the hashes of the bytes we sent and received. The gateway doesn't rewrite non-streamed request bytes.
+- An ed25519 signature that verifies against `signing_address`.
+- The same key in the model's attestation report (one candidate), whose TDX quote has `report_data = key || our nonce`. The script reads the quote but doesn't verify it; full quote and GPU verification belong to registering a key.
+
+**Structured output and the seed work together with `provider_tee`.** `response_format` with a `json_schema` enum and a `seed` both stayed in the signed request, and the script prints this as `structured output + seed`. The script sends a random 32-bit seed; in manual probes before it was written, seeds of 2^32 − 1 and 2^53 − 1 were also accepted and signed. Prompt Template v1 limits the seed to 0 … 2^32 − 1 so it fits a `u32` in Rust and stays exact in JavaScript. The one-word fallback isn't needed, so it isn't built.
+
+**Model: `Qwen/Qwen3.8-27B`.** It is the cheapest Confidential TEE model that passes.
+
+| Model | Price in/out (USD per 1M tokens) | Result with Prompt Template v1 settings |
+|---|---|---|
+| `Qwen/Qwen3.8-27B` | 0.04 / 1.35 | Passes. With thinking off: 0 reasoning tokens, 13 completion tokens, about 445 response bytes. |
+| `z-ai/glm-5.3-flash` | 0.08 / 0.50 | Signs correctly, but reasons even with `enable_thinking: false` (65 reasoning tokens), so it hits `max_tokens: 64` with `finish_reason: length` and no verdict. Raising the limit would let it answer, but it would still cost more: at 8k input tokens about $0.00068 (8k × 0.08 + about 75 output tokens × 0.50, per 1M) against about $0.00034 for Qwen. Counting GLM's reasoning tokens, Qwen is cheaper at every prompt size. |
+| `Qwen/Qwen3-VL-30B-A3B-Instruct`, `Qwen/Qwen3.6-35B-A3B-FP8` | 0.15 / 0.55, 0.17 / 1.10 | Not run: input price is about 4× higher, and the prompt is almost all input. |
+| `deepseek-ai/DeepSeek-V4.1-Flash-1017` | 0.30 / 1.20 | Not run: no `structured_outputs` or `seed` in `/v1/models`. |
+
+The `-abliterated` Qwen variant costs the same but has its safety tuning removed, so it isn't a candidate. The test request (225 prompt tokens, 13 completion tokens) cost about $0.00003. Because the output is always about 13 tokens, cost grows with the size of the Claim and Evidence: about $0.0003 for 8k input tokens.
+
+**Prompt Template v1 inference settings**, built by `buildAiRequest` in `typescript/packages/core`:
+
+| Field | Value |
+|---|---|
+| `model` | `Qwen/Qwen3.8-27B` |
+| `messages` | A system message with the template text, then one user message whose content is the JSON object `{"claim","asserter_evidence","disputer_evidence"}` |
+| `temperature` | `0` |
+| `seed` | Chosen by the contract at dispute time, 0 … 2^32 − 1 |
+| `max_tokens` | `64` |
+| `stream` | `false` |
+| `response_format` | `json_schema`, strict, `{"verdict": "TRUE" \| "FALSE" \| "UNRESOLVABLE"}` and nothing else |
+| `chat_template_kwargs` | `{"enable_thinking": false}` |
+| Headers | `x-no-aliasing: true`, `Accept-Encoding: identity` |
+
+Keys appear in the order above, with compact JSON and `JSON.stringify` escaping (the same as serde_json for strings). Numbers are written as `JSON.stringify` writes them: `temperature` is `0`, while serde_json writes an `f64` zero as `0.0`, so the contract must keep it as an integer or write it literally. The template text is `PROMPT_TEMPLATE_V1` in core.
+
+Details the contract needs:
+- The model writes whitespace inside its JSON answer (`"{\n  \"verdict\": \"TRUE\"\n}"`), so the contract must parse `choices[0].message.content` as JSON, not compare it to a fixed string. It should also require exactly one choice and `finish_reason: "stop"`.
+- `/v1/signature` returns `signature` and `signing_address` as hex without a `0x` prefix.
+- The signature was available on the first fetch, within about a second of the completion.
+- The model's attestation report needs no API key, as the live docs say.
 
 ## Open questions
 
 - Does the model's `app_compose` pin the weights hash, or only container images? This decides how strong "model pinned" really is.
 - How often do model or gateway signing keys rotate? KMS derivation suggests rarely, but there is no published policy.
-- Does the gateway rewrite non-streamed request bytes in any case (for example, injected defaults)? Test this on day 1.
+- Does the gateway rewrite non-streamed request bytes in any case (for example, injected defaults)? Answered on 2026-11-13: no (§7).
 - `tee-verifier` gas (about 176 TGas) is the MPC team's measurement on their quotes. NEAR AI quotes come from the same dstack/TDX stack, but this has not been measured.
 - Docs vs. skill drift: the local `.kiro/skills/near-ai-cloud` still says the attestation report requires an API key and lists old models. Prefer the live docs.
