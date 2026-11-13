@@ -115,6 +115,13 @@
       "skillPath": "skills/engineering/improve-codebase-architecture/SKILL.md",
       "computedHash": "f0820b18426a7d9a6c823a890988ba0ac70bf0fd596d30d7ef07c88558728c23"
     },
+    "mintlify": {
+      "source": "mintlify/docs",
+      "ref": "main",
+      "sourceType": "github",
+      "skillPath": "agent-context/context/skills/mintlify/SKILL.md",
+      "computedHash": "d1776562c05f82ba4db23dae44d9644a2260ae96cea21b3b098c44966ac0017d"
+    },
     "near-ai-cloud": {
       "source": "near/agent-skills",
       "sourceType": "github",
