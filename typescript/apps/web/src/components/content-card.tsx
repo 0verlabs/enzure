@@ -7,7 +7,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { config } from "@/config";
 
-type Item = { label: string; hash: string | null };
+type Item = { label: string; hash: string | null; lead?: boolean };
 
 /**
  * The Claim and both Evidence items, fetched from storage in the browser and
@@ -15,7 +15,7 @@ type Item = { label: string; hash: string | null };
  */
 export function ContentCard({ assertion }: { assertion: OracleAssertion }) {
   const items: Item[] = [
-    { label: "Claim", hash: assertion.claim_hash },
+    { label: "Claim", hash: assertion.claim_hash, lead: true },
     { label: "Asserter's Evidence", hash: assertion.evidence_hash },
     ...(assertion.dispute
       ? [{ label: "Disputer's Evidence", hash: assertion.dispute.evidence_hash }]
@@ -29,9 +29,9 @@ export function ContentCard({ assertion }: { assertion: OracleAssertion }) {
           Fetched from storage; each is checked against the sha256 hash on-chain.
         </CardDescription>
       </CardHeader>
-      <CardContent className="flex flex-col gap-4">
+      <CardContent className="flex flex-col gap-5">
         {items.map((item, index) => (
-          <div key={item.label} className="flex flex-col gap-4">
+          <div key={item.label} className="flex flex-col gap-5">
             {index > 0 ? <Separator /> : null}
             <ContentItem item={item} />
           </div>
@@ -62,18 +62,23 @@ function ContentItem({ item }: { item: Item }) {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <span className="font-medium">{item.label}</span>
+        <span className="kicker text-muted-foreground">{item.label}</span>
         {item.hash ? <HashStatus content={content} /> : null}
       </div>
       {item.hash ? (
         <>
-          <code className="text-xs break-all text-muted-foreground">sha256 {item.hash}</code>
           {content === null ? (
-            <Skeleton className="h-16 w-full" />
+            <Skeleton className={item.lead ? "h-20 w-full" : "h-16 w-full"} />
           ) : "text" in content ? (
-            <pre className="max-h-80 overflow-auto rounded-md bg-muted p-3 text-sm whitespace-pre-wrap">
-              {content.text}
-            </pre>
+            item.lead ? (
+              <blockquote className="border-l-2 border-primary pl-4 text-lg leading-relaxed whitespace-pre-wrap text-foreground">
+                {content.text}
+              </blockquote>
+            ) : (
+              <pre className="max-h-80 overflow-auto rounded-lg border border-border bg-background/60 p-4 font-mono text-sm leading-relaxed whitespace-pre-wrap">
+                {content.text}
+              </pre>
+            )
           ) : (
             <p className="text-sm text-muted-foreground">
               {content.status === "missing"
@@ -85,6 +90,9 @@ function ContentItem({ item }: { item: Item }) {
                     : `Couldn't read storage: ${content.message}`}
             </p>
           )}
+          <code className="font-mono text-xs break-all text-muted-foreground">
+            sha256 {item.hash}
+          </code>
         </>
       ) : (
         <p className="text-sm text-muted-foreground">None given.</p>

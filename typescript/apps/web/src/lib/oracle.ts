@@ -19,6 +19,9 @@ export const oracle = {
       ...(beforeId === undefined ? {} : { before_id: beforeId }),
     }),
   getAssertion: (id: number) => view<OracleAssertion>("get_assertion", { assertion_id: id }),
+  /** The newest Assertion, or null before the first; its id is how many have been posted. */
+  latestAssertion: async () =>
+    (await view<OracleAssertion[]>("list_assertions", { limit: 1 }))[0] ?? null,
   getConfig: () =>
     view<{ dao: string; min_bond: string; default_liveness: number }>("get_config", {}),
   getBalance: (accountId: string) => view<string>("get_balance", { account_id: accountId }),

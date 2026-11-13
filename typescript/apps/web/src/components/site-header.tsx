@@ -1,33 +1,78 @@
-import { Link } from "@tanstack/react-router";
-import { AlertTriangleIcon, LogOutIcon, WalletIcon } from "lucide-react";
+import { Link, useRouterState } from "@tanstack/react-router";
+import {
+  AlertTriangleIcon,
+  CheckIcon,
+  ChevronDownIcon,
+  CopyIcon,
+  ExternalLinkIcon,
+  LogOutIcon,
+  WalletIcon,
+} from "lucide-react";
+import { Fragment, useState } from "react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { Separator } from "@/components/ui/separator";
+import { SidebarTrigger } from "@/components/ui/sidebar";
 import { Spinner } from "@/components/ui/spinner";
 import { accountUrl, config, missingConfig } from "@/config";
 import { useWallet } from "@/lib/wallet";
 
+/** Where the page sits, from its path: the app has three kinds of page. */
+function crumbsFor(pathname: string): { label: string; to?: "/" }[] {
+  if (pathname === "/assert") return [{ label: "Assertions", to: "/" }, { label: "Post" }];
+  const id = /^\/assertions\/(\d+)/.exec(pathname)?.[1];
+  if (id) return [{ label: "Assertions", to: "/" }, { label: `Assertion ${id}` }];
+  return [{ label: "Assertions" }];
+}
+
+/** The bar above every page: the sidebar toggle, where you are, the network and the wallet. */
 export function SiteHeader() {
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const crumbs = crumbsFor(pathname);
   return (
-    <header className="border-b">
-      <div className="mx-auto flex h-14 w-full max-w-4xl items-center gap-6 px-4">
-        <Link to="/" className="font-semibold">
-          Enzure
-        </Link>
-        <nav className="flex items-center gap-4 text-sm text-muted-foreground">
-          <Link
-            to="/"
-            activeOptions={{ exact: true }}
-            activeProps={{ className: "text-foreground" }}
-          >
-            Assertions
-          </Link>
-          <Link to="/assert" activeProps={{ className: "text-foreground" }}>
-            Post
-          </Link>
-        </nav>
-        <div className="ml-auto">
-          <WalletButton />
-        </div>
+    <header className="sticky top-0 z-30 flex h-14 shrink-0 items-center gap-3 border-b bg-background px-4">
+      <SidebarTrigger className="-ml-1" />
+      <Separator orientation="vertical" className="data-vertical:h-4 data-vertical:self-center" />
+      <Breadcrumb>
+        <BreadcrumbList>
+          {crumbs.map((crumb, index) => (
+            <Fragment key={crumb.label}>
+              {index > 0 ? <BreadcrumbSeparator /> : null}
+              <BreadcrumbItem>
+                {crumb.to ? (
+                  <BreadcrumbLink render={<Link to={crumb.to} />}>{crumb.label}</BreadcrumbLink>
+                ) : (
+                  <BreadcrumbPage>{crumb.label}</BreadcrumbPage>
+                )}
+              </BreadcrumbItem>
+            </Fragment>
+          ))}
+        </BreadcrumbList>
+      </Breadcrumb>
+      <div className="ml-auto flex items-center gap-2">
+        <Badge variant="outline" className="hidden font-mono sm:inline-flex">
+          <span className="size-1.5 rounded-full bg-primary" />
+          {config.network}
+        </Badge>
+        <WalletButton />
       </div>
     </header>
   );
@@ -35,6 +80,8 @@ export function SiteHeader() {
 
 function WalletButton() {
   const wallet = useWallet();
+  const [copied, setCopied] = useState(false);
+
   if (wallet.loading) {
     return (
       <Button variant="outline" size="sm" disabled>
@@ -47,29 +94,48 @@ function WalletButton() {
     return (
       <Button size="sm" onClick={() => void wallet.signIn()}>
         <WalletIcon data-icon="inline-start" />
-        Connect {config.network} wallet
+        Connect wallet
       </Button>
     );
   }
+  const accountId = wallet.accountId;
   return (
-    <div className="flex items-center gap-2 text-sm">
-      <a
-        href={accountUrl(wallet.accountId)}
-        target="_blank"
-        rel="noreferrer"
-        className="max-w-48 truncate"
-      >
-        {wallet.accountId}
-      </a>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        aria-label="Disconnect"
-        onClick={() => void wallet.signOut()}
-      >
-        <LogOutIcon />
-      </Button>
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger render={<Button variant="outline" size="sm" className="max-w-56" />}>
+        <span aria-hidden className="size-2 shrink-0 rounded-full bg-primary" />
+        <span className="truncate font-mono text-xs">{accountId}</span>
+        <ChevronDownIcon data-icon="inline-end" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-60">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel className="truncate font-mono">{accountId}</DropdownMenuLabel>
+          <DropdownMenuItem
+            closeOnClick={false}
+            onClick={() => {
+              void navigator.clipboard.writeText(accountId);
+              setCopied(true);
+              setTimeout(() => setCopied(false), 1500);
+            }}
+          >
+            {copied ? <CheckIcon /> : <CopyIcon />}
+            {copied ? "Copied" : "Copy account ID"}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            render={<a href={accountUrl(accountId)} target="_blank" rel="noreferrer" />}
+          >
+            <ExternalLinkIcon />
+            Open in NearBlocks
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+        <DropdownMenuSeparator />
+        <DropdownMenuGroup>
+          <DropdownMenuItem variant="destructive" onClick={() => void wallet.signOut()}>
+            <LogOutIcon />
+            Disconnect
+          </DropdownMenuItem>
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

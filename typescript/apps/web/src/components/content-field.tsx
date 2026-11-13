@@ -12,6 +12,7 @@ export function ContentField({
   onChange,
   placeholder,
   disabled,
+  rows = 4,
 }: {
   label: string;
   description: string;
@@ -19,17 +20,19 @@ export function ContentField({
   onChange: (value: string) => void;
   placeholder?: string;
   disabled?: boolean;
+  rows?: number;
 }) {
   const id = useId();
   const file = useRef<HTMLInputElement>(null);
+  const bytes = new TextEncoder().encode(value).length;
   return (
     <Field>
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <FieldLabel htmlFor={id}>{label}</FieldLabel>
         <Button
           type="button"
           variant="ghost"
-          size="xs"
+          size="sm"
           disabled={disabled}
           onClick={() => file.current?.click()}
         >
@@ -41,6 +44,7 @@ export function ContentField({
           type="file"
           accept="text/*,.md,.json,.txt"
           className="hidden"
+          aria-label={`Load ${label} from a file`}
           onChange={async (event) => {
             const picked = event.target.files?.[0];
             if (picked) onChange(await picked.text());
@@ -54,9 +58,15 @@ export function ContentField({
         onChange={(event) => onChange(event.target.value)}
         placeholder={placeholder}
         disabled={disabled}
-        className="min-h-28 font-mono text-sm"
+        rows={rows}
+        className="min-h-28 font-mono text-sm leading-relaxed"
       />
-      <FieldDescription>{description}</FieldDescription>
+      <div className="flex justify-between gap-4">
+        <FieldDescription>{description}</FieldDescription>
+        <span className="shrink-0 font-mono text-xs text-muted-foreground tabular-nums">
+          {bytes.toLocaleString()} bytes
+        </span>
+      </div>
     </Field>
   );
 }

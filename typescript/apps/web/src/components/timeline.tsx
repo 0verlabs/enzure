@@ -9,14 +9,15 @@ import {
   type TimelineStep,
 } from "@enzure/core";
 import { useEffect, useState, type ReactNode } from "react";
-import { Account, Countdown, TxLink, useNowNs } from "@/components/assertion-bits";
+import { Account, Countdown, LocalTime, TxLink, useNowNs } from "@/components/assertion-bits";
 import { DaoRulingDetail } from "@/components/dao-ruling";
 import { EvmHookDetail, NearHookDetail } from "@/components/hook-delivery";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { config } from "@/config";
-import { formatNear, formatTime, hookStatus, shortHash } from "@/lib/oracle";
+import { formatNear, hookStatus, shortHash } from "@/lib/oracle";
+import { cn } from "@/lib/utils";
 
 interface StepView {
   title: string;
@@ -68,12 +69,16 @@ const STEP_VIEWS: {
     context: StepContext,
   ) => StepView;
 } = {
-  posted: (step) => ({ title: "Posted", at: formatTime(step.atNs) }),
+  posted: (step) => ({ title: "Posted", at: <LocalTime ns={step.atNs} /> }),
   liveness: (step) =>
     step.open
       ? {
           title: "Liveness running",
-          at: <>ends {formatTime(step.endsAtNs)}</>,
+          at: (
+            <>
+              ends <LocalTime ns={step.endsAtNs} />
+            </>
+          ),
           detail: (
             <>
               <Countdown endsAtNs={step.endsAtNs} /> left to dispute
@@ -82,11 +87,11 @@ const STEP_VIEWS: {
           open: true,
         }
       : step.disputedAtNs
-        ? { title: "Liveness stopped by a dispute", at: formatTime(step.disputedAtNs) }
-        : { title: "Liveness ended", at: formatTime(step.endsAtNs) },
+        ? { title: "Liveness stopped by a dispute", at: <LocalTime ns={step.disputedAtNs} /> }
+        : { title: "Liveness ended", at: <LocalTime ns={step.endsAtNs} /> },
   disputed: (step) => ({
     title: "Disputed",
-    at: formatTime(step.atNs),
+    at: <LocalTime ns={step.atNs} />,
     detail: (
       <>
         by <Account id={step.dispute.disputer} />, AI request seed {step.dispute.seed}
@@ -95,7 +100,7 @@ const STEP_VIEWS: {
   }),
   ai_verdict: (step) => ({
     title: `AI Verdict ${step.index + 1}`,
-    at: formatTime(step.atNs),
+    at: <LocalTime ns={step.atNs} />,
     detail: (
       <span className="flex flex-wrap items-center gap-2">
         <Badge variant={step.verdict.verdict === "TRUE" ? "default" : "secondary"}>
@@ -113,7 +118,11 @@ const STEP_VIEWS: {
       const loser = losingParty(assertion);
       return {
         title: "Appeal Window open",
-        at: <>closes {formatTime(step.endsAtNs)}</>,
+        at: (
+          <>
+            closes <LocalTime ns={step.endsAtNs} />
+          </>
+        ),
         detail: (
           <>
             <Countdown endsAtNs={step.endsAtNs} /> left
@@ -129,12 +138,15 @@ const STEP_VIEWS: {
       };
     }
     return step.appealedAtNs
-      ? { title: "Appeal Window closed by the move to Appeal", at: formatTime(step.appealedAtNs) }
-      : { title: "Appeal Window closed", at: formatTime(step.endsAtNs) };
+      ? {
+          title: "Appeal Window closed by the move to Appeal",
+          at: <LocalTime ns={step.appealedAtNs} />,
+        }
+      : { title: "Appeal Window closed", at: <LocalTime ns={step.endsAtNs} /> };
   },
   appeal: (step) => ({
     title: "In Appeal",
-    at: formatTime(step.atNs),
+    at: <LocalTime ns={step.atNs} />,
     detail: (
       <span className="flex flex-col gap-1">
         <span>{appealReason(step.appeal)}.</span>
@@ -146,7 +158,9 @@ const STEP_VIEWS: {
             <Badge variant="secondary">{step.conflictingVerdicts[1]}</Badge>
           </span>
         ) : null}
-        <span>The DAO can rule until {formatTime(step.appeal.dao_deadline_ns)}.</span>
+        <span>
+          The DAO can rule until <LocalTime ns={step.appeal.dao_deadline_ns} />.
+        </span>
       </span>
     ),
   }),
@@ -154,7 +168,11 @@ const STEP_VIEWS: {
     step.open
       ? {
           title: "Waiting for the DAO",
-          at: <>deadline {formatTime(step.endsAtNs)}</>,
+          at: (
+            <>
+              deadline <LocalTime ns={step.endsAtNs} />
+            </>
+          ),
           detail: (
             <>
               <Countdown endsAtNs={step.endsAtNs} /> left for the DAO to rule; after that anyone can
@@ -165,13 +183,13 @@ const STEP_VIEWS: {
         }
       : {
           title: "DAO deadline passed without a ruling",
-          at: formatTime(step.endsAtNs),
+          at: <LocalTime ns={step.endsAtNs} />,
           detail:
             "Anyone can settle: an appealed AI Verdict stands; otherwise the outcome is FALSE and both bonds are returned.",
         },
   dao_ruling: (step, { assertion, events }) => ({
     title: "DAO ruled",
-    at: formatTime(step.atNs),
+    at: <LocalTime ns={step.atNs} />,
     linkLabel: "Approved in",
     detail: assertion.appeal ? (
       <DaoRulingDetail outcome={step.outcome} appeal={assertion.appeal} events={events} />
@@ -179,7 +197,7 @@ const STEP_VIEWS: {
   }),
   settled: (step) => ({
     title: "Settled",
-    at: formatTime(step.atNs),
+    at: <LocalTime ns={step.atNs} />,
     detail: (
       <Badge variant={step.outcome ? "default" : "destructive"}>
         {step.outcome ? "TRUE" : "FALSE"}
@@ -253,31 +271,43 @@ export function Timeline({
           {steps.map((step, index) => {
             const view = viewOf(step, context);
             const hash = hashes[index];
+            const lastStep = index === steps.length - 1;
             return (
-              <li key={`${step.kind}-${index}`} className="flex gap-3">
+              <li key={`${step.kind}-${index}`} className="flex gap-4">
                 <div className="flex flex-col items-center">
-                  <span
-                    className={
-                      view.open
-                        ? "mt-1.5 size-2.5 rounded-full border-2 border-primary"
-                        : "mt-1.5 size-2.5 rounded-full bg-primary"
-                    }
-                  />
-                  {index < steps.length - 1 ? <span className="w-px flex-1 bg-border" /> : null}
+                  <span className="relative mt-1 flex size-5 shrink-0 items-center justify-center">
+                    {view.open ? (
+                      <>
+                        <span className="ping-soft absolute inset-0.5 rounded-full bg-primary/40" />
+                        <span className="relative size-3 rounded-full border-2 border-primary bg-background" />
+                      </>
+                    ) : (
+                      <span className="flex size-5 items-center justify-center rounded-full bg-primary/15">
+                        <span className="size-2 rounded-full bg-primary" />
+                      </span>
+                    )}
+                  </span>
+                  {!lastStep ? (
+                    <span
+                      className={cn("my-1 w-px flex-1", view.open ? "bg-primary/50" : "bg-border")}
+                    />
+                  ) : null}
                 </div>
-                <div className="flex flex-1 flex-col gap-1 pb-5">
-                  <div className="flex flex-wrap items-baseline justify-between gap-x-4">
+                <div className={cn("flex min-w-0 flex-1 flex-col gap-1.5", !lastStep && "pb-7")}>
+                  <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
                     <span className="font-medium">{view.title}</span>
                     {view.at ? (
-                      <span className="text-xs text-muted-foreground">{view.at}</span>
+                      <span className="font-mono text-xs text-muted-foreground">{view.at}</span>
                     ) : null}
                   </div>
                   {view.detail ? (
-                    <div className="text-sm text-muted-foreground">{view.detail}</div>
+                    <div className="text-sm [overflow-wrap:anywhere] text-muted-foreground">
+                      {view.detail}
+                    </div>
                   ) : null}
                   {"event" in step && step.event ? (
                     hash ? (
-                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
                         {view.linkLabel ? <>{view.linkLabel} </> : null}
                         <TxLink hash={hash} />
                       </span>

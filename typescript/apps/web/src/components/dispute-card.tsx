@@ -60,7 +60,7 @@ export function DisputeCard({
     <form onSubmit={submit}>
       <Card>
         <CardHeader>
-          <CardTitle>Dispute</CardTitle>
+          <CardTitle>Dispute this Assertion</CardTitle>
           <CardDescription>
             Think the Claim is false? Dispute it within{" "}
             <Countdown endsAtNs={assertion.liveness_ends_at_ns} /> with a bond of{" "}
@@ -84,8 +84,14 @@ export function DisputeCard({
               Disputed in <TxLink hash={sent} />
             </p>
           ) : null}
-          <div className="flex items-center gap-3">
-            <Button type="submit" variant="destructive" disabled={busy || !wallet.accountId}>
+          <div className="flex flex-col gap-3">
+            <Button
+              type="submit"
+              variant="destructive"
+              size="lg"
+              className="h-10"
+              disabled={busy || !wallet.accountId}
+            >
               {busy ? <Spinner data-icon="inline-start" /> : null}
               {step === "uploading"
                 ? "Uploading…"

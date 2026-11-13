@@ -1,15 +1,37 @@
 import { canAppeal, type OracleAssertion } from "@enzure/core";
-import { createFileRoute, notFound, useRouter } from "@tanstack/react-router";
-import { useEffect } from "react";
+import { createFileRoute, Link, notFound, useRouter } from "@tanstack/react-router";
+import { ArrowLeftIcon, CheckCircle2Icon, SearchXIcon, XCircleIcon } from "lucide-react";
+import { useEffect, type ReactNode } from "react";
 import { z } from "zod";
-import { Account, Countdown, StateBadge, useNowNs } from "@/components/assertion-bits";
+import {
+  Account,
+  Countdown,
+  LocalTime,
+  StateBadge,
+  useMounted,
+  useNowNs,
+  windowProgress,
+} from "@/components/assertion-bits";
 import { AppealCard } from "@/components/appeal-card";
 import { ContentCard } from "@/components/content-card";
 import { DisputeCard } from "@/components/dispute-card";
 import { ErrorAlert } from "@/components/error-alert";
+import { PageHeader } from "@/components/page-header";
+import { StageTrack, stagesOf } from "@/components/stage-track";
 import { Timeline, appealReason } from "@/components/timeline";
-import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatNear, formatTime, hookStatus, oracle } from "@/lib/oracle";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@/components/ui/empty";
+import { Progress } from "@/components/ui/progress";
+import { formatNear, hookStatus, oracle } from "@/lib/oracle";
+import { cn } from "@/lib/utils";
 import { useWallet } from "@/lib/wallet";
 
 /** How often an Assertion still moving (unsettled, or with a Hook in flight) re-reads the contract. */
@@ -41,7 +63,21 @@ export const Route = createFileRoute("/assertions/$id")({
   component: AssertionPage,
   errorComponent: ({ error }) => <ErrorAlert error={error} title="Couldn't read the Assertion" />,
   notFoundComponent: () => (
-    <p className="text-muted-foreground">There is no Assertion with this id.</p>
+    <Empty className="flex-1">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <SearchXIcon />
+        </EmptyMedia>
+        <EmptyTitle>No Assertion with this id</EmptyTitle>
+        <EmptyDescription>It may not have been posted yet.</EmptyDescription>
+      </EmptyHeader>
+      <EmptyContent>
+        <Button variant="outline" nativeButton={false} render={<Link to="/" />}>
+          <ArrowLeftIcon data-icon="inline-start" />
+          All Assertions
+        </Button>
+      </EmptyContent>
+    </Empty>
   ),
 });
 
@@ -74,41 +110,194 @@ function AssertionPage() {
 
   return (
     <>
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-3 text-xl">
+      <PageHeader
+        title={
+          <>
             Assertion {assertion.id}
             <StateBadge assertion={assertion} />
-          </CardTitle>
-          <CardDescription>
+          </>
+        }
+        description={
+          <>
             Posted by <Account id={assertion.asserter} /> with a bond of{" "}
-            {formatNear(assertion.bond)}
+            <span className="text-foreground">{formatNear(assertion.bond)}</span>
             {assertion.dispute ? (
               <>
                 , disputed by <Account id={assertion.dispute.disputer} />
               </>
             ) : null}
             .
-          </CardDescription>
-        </CardHeader>
-      </Card>
-      {assertion.state === "in_appeal" && assertion.appeal ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>In Appeal</CardTitle>
-            <CardDescription>
-              {appealReason(assertion.appeal)}. The DAO can rule until{" "}
-              {formatTime(assertion.appeal.dao_deadline_ns)} (
-              <Countdown endsAtNs={assertion.appeal.dao_deadline_ns} ended="passed" />
-              ); after that anyone can settle.
-            </CardDescription>
-          </CardHeader>
-        </Card>
-      ) : null}
-      {canDispute ? <DisputeCard assertion={assertion} onDisputed={refresh} /> : null}
-      {appealable ? <AppealCard assertion={assertion} onAppealed={refresh} /> : null}
-      <Timeline assertion={assertion} onChanged={refresh} />
-      <ContentCard assertion={assertion} />
+          </>
+        }
+      />
+
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="flex min-w-0 flex-col gap-6">
+          <Card>
+            <CardContent>
+              <StageTrack stages={stagesOf(assertion, now)} />
+            </CardContent>
+          </Card>
+          <ContentCard assertion={assertion} />
+          <Timeline assertion={assertion} onChanged={refresh} />
+        </div>
+        <aside className="flex flex-col gap-6 lg:sticky lg:top-20">
+          <StatusPanel assertion={assertion} />
+          {assertion.state === "in_appeal" && assertion.appeal ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>In Appeal</CardTitle>
+                <CardDescription>
+                  {appealReason(assertion.appeal)}. The DAO can rule until{" "}
+                  <LocalTime ns={assertion.appeal.dao_deadline_ns} /> (
+                  <Countdown endsAtNs={assertion.appeal.dao_deadline_ns} ended="passed" />
+                  ); after that anyone can settle.
+                </CardDescription>
+              </CardHeader>
+            </Card>
+          ) : null}
+          {canDispute ? <DisputeCard assertion={assertion} onDisputed={refresh} /> : null}
+          {appealable ? <AppealCard assertion={assertion} onAppealed={refresh} /> : null}
+          <FactsCard assertion={assertion} />
+        </aside>
+      </div>
     </>
+  );
+}
+
+/** The one number that matters right now: time left in the open window, or the outcome. */
+function StatusPanel({ assertion }: { assertion: OracleAssertion }) {
+  const now = useNowNs();
+  const mounted = useMounted();
+
+  if (assertion.state === "settled") {
+    const truthful = !!assertion.outcome;
+    return (
+      <Card>
+        <CardContent className="flex items-center gap-4">
+          {truthful ? (
+            <CheckCircle2Icon className="size-8 text-primary" />
+          ) : (
+            <XCircleIcon className="size-8 text-destructive" />
+          )}
+          <div className="flex flex-col gap-1.5">
+            <span className="kicker text-muted-foreground">Outcome</span>
+            <span
+              className={cn(
+                "font-heading text-3xl leading-none font-semibold",
+                truthful ? "text-primary" : "text-destructive",
+              )}
+            >
+              {truthful ? "TRUE" : "FALSE"}
+            </span>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const window =
+    assertion.state === "asserted"
+      ? {
+          label: "Liveness ends in",
+          start: assertion.asserted_at_ns,
+          end: assertion.liveness_ends_at_ns,
+        }
+      : assertion.state === "ruled" && assertion.appeal_window_ends_at_ns
+        ? {
+            label: "Appeal Window closes in",
+            start: assertion.ai_verdicts[0]?.accepted_at_ns ?? assertion.asserted_at_ns,
+            end: assertion.appeal_window_ends_at_ns,
+          }
+        : assertion.state === "disputed" && assertion.dispute
+          ? {
+              label: "AI Verdict due in",
+              start: assertion.dispute.disputed_at_ns,
+              end: assertion.dispute.ai_verdict_deadline_ns,
+            }
+          : assertion.state === "in_appeal" && assertion.appeal
+            ? {
+                label: "The DAO can rule for",
+                start: assertion.appeal.started_at_ns,
+                end: assertion.appeal.dao_deadline_ns,
+              }
+            : null;
+
+  if (!window) {
+    return (
+      <Card>
+        <CardContent className="flex flex-col gap-1.5">
+          <span className="kicker text-muted-foreground">Now</span>
+          <span className="font-heading text-2xl font-semibold">Waiting to settle</span>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardContent className="flex flex-col gap-3">
+        <span className="kicker text-muted-foreground">{window.label}</span>
+        <span className="font-mono text-3xl leading-none font-medium tracking-tight">
+          <Countdown endsAtNs={window.end} ended="Ended" />
+        </span>
+        <Progress
+          aria-label="Time elapsed"
+          value={mounted ? windowProgress(window.start, window.end, now) : 0}
+        />
+      </CardContent>
+    </Card>
+  );
+}
+
+function FactsCard({ assertion }: { assertion: OracleAssertion }) {
+  const hooks = assertion.hooks ?? [];
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle>Details</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <dl className="flex flex-col divide-y divide-border text-sm">
+          <Fact label="Bond">{formatNear(assertion.bond)}</Fact>
+          <Fact label="Asserter">
+            <Account id={assertion.asserter} />
+          </Fact>
+          {assertion.dispute ? (
+            <Fact label="Disputer">
+              <Account id={assertion.dispute.disputer} />
+            </Fact>
+          ) : null}
+          <Fact label="Posted">
+            <LocalTime ns={assertion.asserted_at_ns} />
+          </Fact>
+          <Fact label="Liveness ends">
+            <LocalTime ns={assertion.liveness_ends_at_ns} />
+          </Fact>
+          {assertion.settled_at_ns ? (
+            <Fact label="Settled">
+              <LocalTime ns={assertion.settled_at_ns} />
+            </Fact>
+          ) : null}
+          {assertion.prompt_template_version !== null ? (
+            <Fact label="Prompt Template">v{assertion.prompt_template_version}</Fact>
+          ) : null}
+          <Fact label="Hooks">
+            {hooks.length === 0
+              ? "None"
+              : `${hooks.filter((hook) => "near" in hook).length} NEAR, ${hooks.filter((hook) => "evm" in hook).length} EVM`}
+          </Fact>
+        </dl>
+      </CardContent>
+    </Card>
+  );
+}
+
+function Fact({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="flex flex-col gap-1 py-2.5 first:pt-0 last:pb-0">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="min-w-0 break-words">{children}</dd>
+    </div>
   );
 }
