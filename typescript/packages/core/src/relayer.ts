@@ -1,4 +1,5 @@
 import { sha256 } from "@noble/hashes/sha2.js";
+import { decodeFunctionResult, encodeFunctionData, type Address, type Hex } from "viem";
 import { bytesToHex } from "./signature.ts";
 import { recoverEvmSigner, resultMessageDigest, type ResultMessage } from "./result-message.ts";
 
@@ -104,7 +105,9 @@ export function checkSignedResult(
   signed: SignedResultView,
   oracleAddress: string,
 ): SignedResultCheck {
-  if (signed.asserter_hash !== `0x${bytesToHex(sha256(new TextEncoder().encode(signed.asserter)))}`) {
+  if (
+    signed.asserter_hash !== `0x${bytesToHex(sha256(new TextEncoder().encode(signed.asserter)))}`
+  ) {
     return { ok: false, reason: "asserter_hash does not match asserter" };
   }
   let signer: string;
@@ -113,7 +116,8 @@ export function checkSignedResult(
   } catch {
     return { ok: false, reason: "invalid signature" };
   }
-  if (signer !== oracleAddress.toLowerCase()) return { ok: false, reason: "not signed by the oracle" };
+  if (signer !== oracleAddress.toLowerCase())
+    return { ok: false, reason: "not signed by the oracle" };
   return { ok: true };
 }
 
@@ -129,4 +133,195 @@ export function resultMessageOf(signed: SignedResultView): ResultMessage {
     asserter: signed.asserter,
     settledAt: BigInt(signed.settled_at),
   };
+}
+
+/** The Receiver's ABI: the methods and events a Relayer, Consumer or reader uses. */
+export const RECEIVER_ABI = [
+  {
+    type: "function",
+    name: "deliver",
+    stateMutability: "nonpayable",
+    inputs: [
+      {
+        name: "result",
+        type: "tuple",
+        components: [
+          { name: "assertionId", type: "uint256" },
+          { name: "consumer", type: "address" },
+          { name: "outcome", type: "bool" },
+          { name: "claimHash", type: "bytes32" },
+          { name: "asserter", type: "bytes32" },
+          { name: "settledAt", type: "uint256" },
+        ],
+      },
+      { name: "v", type: "uint8" },
+      { name: "r", type: "bytes32" },
+      { name: "s", type: "bytes32" },
+    ],
+    outputs: [{ name: "recorded", type: "bool" }],
+  },
+  {
+    type: "function",
+    name: "retryCallback",
+    stateMutability: "nonpayable",
+    inputs: [
+      { name: "assertionId", type: "uint256" },
+      { name: "consumer", type: "address" },
+    ],
+    outputs: [{ name: "success", type: "bool" }],
+  },
+  {
+    type: "function",
+    name: "isDelivered",
+    stateMutability: "view",
+    inputs: [
+      { name: "assertionId", type: "uint256" },
+      { name: "consumer", type: "address" },
+    ],
+    outputs: [{ type: "bool" }],
+  },
+  {
+    type: "function",
+    name: "outcomeOf",
+    stateMutability: "view",
+    inputs: [{ name: "assertionId", type: "uint256" }],
+    outputs: [
+      {
+        type: "tuple",
+        components: [
+          { name: "recorded", type: "bool" },
+          { name: "truthful", type: "bool" },
+          { name: "claimHash", type: "bytes32" },
+          { name: "asserter", type: "bytes32" },
+          { name: "settledAt", type: "uint256" },
+        ],
+      },
+    ],
+  },
+  {
+    type: "function",
+    name: "oracle",
+    stateMutability: "view",
+    inputs: [],
+    outputs: [{ type: "address" }],
+  },
+  {
+    type: "event",
+    name: "OutcomeRecorded",
+    inputs: [
+      { name: "assertionId", type: "uint256", indexed: true },
+      { name: "consumer", type: "address", indexed: true },
+      { name: "truthful", type: "bool", indexed: false },
+      { name: "claimHash", type: "bytes32", indexed: false },
+      { name: "asserter", type: "bytes32", indexed: false },
+      { name: "settledAt", type: "uint256", indexed: false },
+    ],
+  },
+  {
+    type: "event",
+    name: "ConsumerCalled",
+    inputs: [
+      { name: "assertionId", type: "uint256", indexed: true },
+      { name: "consumer", type: "address", indexed: true },
+      { name: "success", type: "bool", indexed: false },
+    ],
+  },
+] as const;
+
+/** The EVM side of the Relayer: a client to read the Receiver and a wallet with an account and chain to pay for `deliver`. */
+export interface RelayerClients {
+  /** Any viem public client works; only these methods are used. */
+  publicClient: {
+    getChainId(): Promise<number>;
+    call(args: { to: Address; data: Hex }): Promise<{ data?: Hex | undefined }>;
+    waitForTransactionReceipt(args: { hash: Hex }): Promise<{ status: "success" | "reverted" }>;
+  };
+  /** A viem wallet client with its account and chain set. */
+  walletClient: { sendTransaction(args: { to: Address; data: Hex }): Promise<Hex> };
+}
+
+export type RelayResult =
+  | { status: "delivered"; transactionHash: Hex }
+  | { status: "already_delivered" }
+  | { status: "rejected"; reason: string }
+  | { status: "reverted"; transactionHash: Hex };
+
+/**
+ * Delivers one signed result to its Receiver, unless the Receiver already
+ * recorded it for this Consumer or would reject it (another chain, or not
+ * signed by the Receiver's oracle). Waits for the transaction's receipt.
+ */
+export async function relaySignedResult(
+  { publicClient, walletClient }: RelayerClients,
+  signed: SignedResultView,
+): Promise<RelayResult> {
+  const chainId = await publicClient.getChainId();
+  if (chainId !== signed.chain_id) {
+    return {
+      status: "rejected",
+      reason: `signed for chain ${signed.chain_id}, not chain ${chainId}`,
+    };
+  }
+  const receiver = signed.receiver as Address;
+  const isDelivered = { abi: RECEIVER_ABI, functionName: "isDelivered" } as const;
+  const delivered = decodeFunctionResult({
+    ...isDelivered,
+    data: await callReceiver(
+      publicClient,
+      receiver,
+      encodeFunctionData({
+        ...isDelivered,
+        args: [BigInt(signed.assertion_id), signed.consumer as Address],
+      }),
+    ),
+  });
+  if (delivered) return { status: "already_delivered" };
+  const oracleOf = { abi: RECEIVER_ABI, functionName: "oracle" } as const;
+  const oracle = decodeFunctionResult({
+    ...oracleOf,
+    data: await callReceiver(publicClient, receiver, encodeFunctionData(oracleOf)),
+  });
+  const check = checkSignedResult(signed, oracle);
+  if (!check.ok) return { status: "rejected", reason: check.reason };
+
+  const transactionHash = await walletClient.sendTransaction({
+    to: receiver,
+    data: encodeFunctionData({
+      abi: RECEIVER_ABI,
+      functionName: "deliver",
+      args: deliverArgs(signed),
+    }),
+  });
+  const receipt = await publicClient.waitForTransactionReceipt({ hash: transactionHash });
+  return receipt.status === "success"
+    ? { status: "delivered", transactionHash }
+    : { status: "reverted", transactionHash };
+}
+
+/** Calls a view method of the Receiver and returns its raw result. */
+async function callReceiver(
+  client: RelayerClients["publicClient"],
+  receiver: Address,
+  data: Hex,
+): Promise<Hex> {
+  const { data: result } = await client.call({ to: receiver, data });
+  if (result === undefined) throw new Error(`Receiver ${receiver} returned nothing`);
+  return result;
+}
+
+/** The Receiver's `deliver` arguments for a signed result. */
+export function deliverArgs(signed: SignedResultView) {
+  return [
+    {
+      assertionId: BigInt(signed.assertion_id),
+      consumer: signed.consumer as Address,
+      outcome: signed.outcome,
+      claimHash: signed.claim_hash as Hex,
+      asserter: signed.asserter_hash as Hex,
+      settledAt: BigInt(signed.settled_at),
+    },
+    signed.v,
+    signed.r as Hex,
+    signed.s as Hex,
+  ] as const;
 }

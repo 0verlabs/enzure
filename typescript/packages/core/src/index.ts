@@ -37,14 +37,19 @@ export {
   type ResultMessage,
 } from "./result-message.ts";
 export {
+  RECEIVER_ABI,
   checkSignedResult,
+  deliverArgs,
   evmHooksToRelay,
   evmHooksToSign,
+  relaySignedResult,
   resultMessageOf,
   type AssertionView,
   type EvmHookRef,
   type EvmHookView,
   type HookView,
+  type RelayResult,
+  type RelayerClients,
   type SignedResultCheck,
   type SignedResultView,
 } from "./relayer.ts";
