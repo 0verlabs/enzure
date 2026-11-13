@@ -4,8 +4,8 @@ import { loadConfig } from "../src/config.ts";
 const required = {
   ORACLE_ACCOUNT_ID: "oracle.enzure.testnet",
   NEAR_ACCOUNT_ID: "keeper.enzure.testnet",
-  NEAR_PRIVATE_KEY:
-    "ed25519:3D4YudUahN1nawWogh8pAKSj92sUNMdbZGjn7kERKzYoTy8tnFQuwoGUC51DowKqorvkr2pytJSnwuSbsNVfqygr",
+  // Not a key: base58 characters in the shape loadConfig checks, nothing more.
+  NEAR_PRIVATE_KEY: `ed25519:${"testkey".repeat(12)}`,
   NEARAI_API_KEY: "sk-test",
   STORAGE_URL: "https://storage.enzure.example",
 };
