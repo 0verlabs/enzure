@@ -8,7 +8,7 @@ import { DisputeCard } from "@/components/dispute-card";
 import { ErrorAlert } from "@/components/error-alert";
 import { Timeline, appealReason } from "@/components/timeline";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { formatNear, formatTime, oracle } from "@/lib/oracle";
+import { formatNear, formatTime, hookStatus, oracle } from "@/lib/oracle";
 import { useWallet } from "@/lib/wallet";
 
 /** How often an Assertion still moving (unsettled, or with a Hook in flight) re-reads the contract. */
@@ -38,13 +38,14 @@ export const Route = createFileRoute("/assertions/$id")({
   ),
 });
 
+/** NEAR and EVM Hook statuses of a call in flight. */
+const IN_FLIGHT = new Set(["delivering", "signing"]);
+
 /** Whether the contract can still change the Assertion without a user acting: unsettled, or a Hook mid-delivery. */
 function moving(assertion: OracleAssertion): boolean {
   return (
     assertion.state !== "settled" ||
-    (assertion.hooks ?? []).some((hook) =>
-      "near" in hook ? hook.near.status === "delivering" : hook.evm.status === "signing",
-    )
+    (assertion.hooks ?? []).some((hook) => IN_FLIGHT.has(hookStatus(hook)))
   );
 }
 

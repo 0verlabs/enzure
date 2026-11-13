@@ -1,4 +1,9 @@
-import { nearRpcView, type OracleAssertion, type SignedResultView } from "@enzure/core";
+import {
+  nearRpcView,
+  type HookView,
+  type OracleAssertion,
+  type SignedResultView,
+} from "@enzure/core";
 import { config } from "@/config";
 import { yoctoToNear } from "@/lib/near-amount";
 
@@ -31,6 +36,11 @@ export const CALL_GAS = "100000000000000";
 
 /** Gas for `retry_near_hook`: the Hook's own gas (the oracle caps it so this fits) plus the oracle's callback. */
 export const RETRY_HOOK_GAS = "300000000000000";
+
+/** A Hook's delivery status, NEAR (`pending`, `delivering`, …) or EVM (`unsigned`, `signing`, …). */
+export function hookStatus(hook: HookView): string {
+  return "near" in hook ? hook.near.status : hook.evm.status;
+}
 
 /** `1.25 NEAR` for a yoctoNEAR amount. */
 export function formatNear(yocto: string | bigint, decimals = 4): string {
