@@ -53,7 +53,7 @@ const NEAR_STATUS = {
   failed: { label: "Failed", variant: "destructive" },
 } as const;
 
-/** A NEAR Hook's delivery to its Consumer, with a retry button once it failed. */
+/** A NEAR Hook's delivery to its Consumer, with a button to deliver it if it failed or never started. */
 export function NearHookDetail({
   assertionId,
   step,
@@ -74,7 +74,8 @@ export function NearHookDetail({
           to <Account id={step.consumer} />
         </span>
       </span>
-      {step.status === "failed" ? (
+      {/* Hook steps exist only once settled; a pending one is a NEAR Hook a DAO ruling had no gas to start. */}
+      {step.status === "failed" || step.status === "pending" ? (
         <span className="flex flex-wrap items-center gap-3">
           <Button
             size="sm"
@@ -90,10 +91,10 @@ export function NearHookDetail({
             }
           >
             {action.pending ? <Spinner data-icon="inline-start" /> : null}
-            Retry delivery
+            {step.status === "failed" ? "Retry delivery" : "Deliver"}
           </Button>
           {!action.wallet.accountId && !action.wallet.loading ? (
-            <span>Connect a wallet to retry.</span>
+            <span>Connect a wallet to {step.status === "failed" ? "retry" : "deliver it"}.</span>
           ) : null}
         </span>
       ) : null}
