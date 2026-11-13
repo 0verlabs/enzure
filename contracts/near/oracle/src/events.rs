@@ -1,6 +1,6 @@
 //! NEP-297 events, logged as `EVENT_JSON:{"standard":"enzure","version":"1.0.0",...}`.
 use near_sdk::json_types::U64;
-use near_sdk::{AccountId, NearToken, near};
+use near_sdk::{AccountId, Gas, NearToken, near};
 
 /// An amount credited to an account's withdrawable balance.
 #[near(serializers = [json])]
@@ -42,5 +42,21 @@ pub enum Event {
     ConfigChanged {
         min_bond: NearToken,
         default_liveness: u64,
+        max_hooks: u32,
+        max_near_hook_gas: Gas,
+    },
+    /// The NEAR Consumer accepted `assertion_resolved`.
+    #[event_version("1.0.0")]
+    NearHookDelivered {
+        assertion_id: u64,
+        hook_index: u32,
+        consumer: AccountId,
+    },
+    /// The NEAR Consumer's call failed; anyone can retry it with `retry_near_hook`.
+    #[event_version("1.0.0")]
+    NearHookFailed {
+        assertion_id: u64,
+        hook_index: u32,
+        consumer: AccountId,
     },
 }
