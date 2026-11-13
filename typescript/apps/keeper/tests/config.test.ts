@@ -21,22 +21,27 @@ test("the Keeper reads its settings from the environment, with defaults for the 
     nearAiUrl: "https://cloud-api.near.ai/v1",
     storageUrl: "https://storage.enzure.example",
     pollIntervalMs: 15_000,
-    relayer: undefined,
+    relayers: [],
   });
 });
 
-test("the Relayer is switched on by an EVM RPC URL and key together", () => {
+test("the Base Relayer is switched on by BASE_RPC_URL and BASE_RELAYER_KEY together", () => {
   const config = loadConfig({
     ...required,
-    EVM_RPC_URL: "https://sepolia.base.org",
-    EVM_PRIVATE_KEY: `0x${"11".repeat(32)}`,
+    BASE_RPC_URL: "https://sepolia.base.org",
+    BASE_RELAYER_KEY: `0x${"11".repeat(32)}`,
     POLL_INTERVAL_MS: "5000",
   });
 
-  expect(config.relayer).toEqual({
-    evmRpcUrl: "https://sepolia.base.org",
-    evmPrivateKey: `0x${"11".repeat(32)}`,
-  });
+  expect(config.relayers).toEqual([
+    {
+      chain: "BASE",
+      kind: "evm",
+      chainIds: [8453, 84532],
+      rpcUrl: "https://sepolia.base.org",
+      privateKey: `0x${"11".repeat(32)}`,
+    },
+  ]);
   expect(config.pollIntervalMs).toBe(5_000);
 });
 
@@ -49,8 +54,12 @@ test("missing or malformed settings are reported by name without echoing secret 
   expect(run).not.toThrow(/not-a-key/);
 });
 
-test("an EVM key without an EVM RPC URL is rejected", () => {
-  expect(() => loadConfig({ ...required, EVM_PRIVATE_KEY: `0x${"11".repeat(32)}` })).toThrow(
-    /EVM_RPC_URL/,
+test("a relayer key without its RPC URL is rejected", () => {
+  expect(() => loadConfig({ ...required, BASE_RELAYER_KEY: `0x${"11".repeat(32)}` })).toThrow(
+    /BASE_RPC_URL/,
   );
+});
+
+test("empty values count as unset", () => {
+  expect(loadConfig({ ...required, BASE_RPC_URL: "", BASE_RELAYER_KEY: "" }).relayers).toEqual([]);
 });
