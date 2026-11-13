@@ -1,0 +1,36 @@
+---
+title: "Enzure FAQ"
+sidebarTitle: "FAQ"
+description: "Short answers about Enzure: what an optimistic oracle is, how the AI Verdict is checked, who decides appeals, whether you need to run anything, and mainnet."
+keywords: ["faq", "optimistic oracle", "AI Verdict", "DAO", "keeper", "mainnet"]
+icon: "circle-help"
+---
+
+Short answers to the questions people ask most about Enzure.
+
+<AccordionGroup>
+  <Accordion title="What is an optimistic oracle?">
+    An oracle that accepts a statement as true unless someone disputes it in time. Both sides post a bond, so lying costs money.
+  </Accordion>
+  <Accordion title="Is Enzure an AI oracle?">
+    No. Most statements settle without any AI, because nobody disputes them. The AI Verdict is only the first ruling on a dispute, and the DAO can overrule it.
+  </Accordion>
+  <Accordion title="How does the contract know the AI really answered?">
+    The model runs in a TEE and signs its answer. The contract builds the exact question itself, then checks that a DAO-approved key signed the answer to that question.
+  </Accordion>
+  <Accordion title="Can the AI be wrong?">
+    Yes. The signature proves which model answered, not that the answer is right. That's why the losing side can appeal to the DAO.
+  </Accordion>
+  <Accordion title="Who is the DAO?">
+    A Sputnik DAO on NEAR. It rules on appeals, approves AI signing keys, sets the bonds and timers, and is the only account that can upgrade the oracle.
+  </Accordion>
+  <Accordion title="Do I need to run anything?">
+    No. Anyone can settle, submit a verdict or deliver a result. The Keeper service does all of this automatically, but it has no special rights.
+  </Accordion>
+  <Accordion title="Can contracts on other chains use it?">
+    Yes, EVM chains. Enzure signs the outcome through Chain Signatures, and a Receiver contract on that chain checks the signature. There is no bridge. See [Integration](/developers/integration).
+  </Accordion>
+  <Accordion title="Is it on mainnet?">
+    No. Enzure runs on NEAR testnet only, and bonds are in NEAR only. See [Deployments](/developers/deployments).
+  </Accordion>
+</AccordionGroup>

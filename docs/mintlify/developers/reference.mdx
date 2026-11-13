@@ -1,0 +1,53 @@
+---
+title: "Enzure contract reference"
+sidebarTitle: "Contract reference"
+description: "The Enzure oracle's methods and views on NEAR, and the Receiver's functions on EVM chains. Amounts are yoctoNEAR strings and hashes are 64 hex characters."
+keywords: ["reference", "methods", "views", "receiver", "assert_claim", "settle", "events"]
+icon: "file-code"
+---
+
+Arguments are JSON. Amounts are yoctoNEAR strings, hashes are 64 hex characters, and times are nanoseconds.
+
+## Oracle methods
+
+Anyone can call these.
+
+| Method | Attach | What it does |
+| --- | --- | --- |
+| `assert_claim(claim_hash, evidence_hash?, bond, liveness?, hooks)` | Bond + storage | Posts a statement. Returns its id. |
+| `dispute(assertion_id, evidence_hash?)` | Same bond + storage | Disputes during Liveness. |
+| `submit_ai_verdict(...)` | | Submits a signed AI Verdict. Used by Resolvers. |
+| `appeal(assertion_id)` | Same bond | Appeals a lost AI Verdict. |
+| `check_timeout(assertion_id)` | | Sends a disputed statement with no verdict in time to the DAO. |
+| `settle(assertion_id)` | | Settles once the last window closes. Returns the outcome. |
+| `withdraw(amount?)` | 1 yoctoNEAR | Withdraws your balance. |
+| `retry_near_hook(assertion_id, hook_index)` | | Retries a failed NEAR Hook. |
+| `sign_hook(assertion_id, hook_index)` | 1 yoctoNEAR | Signs an EVM Hook through Chain Signatures. |
+
+Only the DAO can call `set_config`, `resolve_appeal`, `add_registered_key`, `remove_registered_key`, `publish_prompt_template` and `upgrade`.
+
+## Oracle views
+
+| View | Returns |
+| --- | --- |
+| `get_assertion(assertion_id)` | A statement with its state, timers, dispute, verdicts and Hooks |
+| `list_assertions(before_id?, limit?)` | Statements, newest first |
+| `get_outcome(assertion_id)` | `true`, `false`, or `null` until settled |
+| `get_balance(account_id)` | What an account can withdraw |
+| `get_config()` | The DAO, minimum bond and timers |
+| `assertion_storage_deposit(hooks?)` | The storage deposit for posting |
+| `dispute_storage_deposit()` | The storage deposit for disputing |
+| `get_signed_result(assertion_id, hook_index)` | An EVM Hook's signed result, for Relayers |
+
+A statement's `state` is one of `asserted`, `disputed`, `ruled`, `in_appeal` or `settled`. The oracle logs each change as a NEP-297 event under the standard `enzure`.
+
+## Receiver (EVM)
+
+| Function | What it does |
+| --- | --- |
+| `deliver(result, v, r, s)` | Checks the oracle's signature, records the outcome once and calls the consumer. Anyone can call it. |
+| `retryCallback(assertionId, consumer)` | Calls the consumer again. |
+| `outcomeOf(assertionId)` | The recorded outcome. |
+| `isDelivered(assertionId, consumer)` | Whether it was delivered to that consumer. |
+
+The source is in [`contracts/`](https://github.com/0verlabs/enzure/tree/main/contracts).

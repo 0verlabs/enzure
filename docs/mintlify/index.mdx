@@ -1,0 +1,35 @@
+---
+title: "Enzure: an optimistic oracle on NEAR"
+sidebarTitle: "Introduction"
+description: "Enzure is an optimistic oracle on NEAR for the promises a contract can't check by itself. A bonded statement settles as true unless someone disputes it."
+keywords: ["enzure", "optimistic oracle", "NEAR", "bonded statements", "AI Verdict", "DAO", "Chain Signatures"]
+icon: "house"
+---
+
+Enzure is an optimistic oracle for the promises a contract can't check by itself, like "I delivered the work in this brief". You post a statement with a bond. If nobody disputes it in time, it settles as true. If someone does, an AI Verdict rules on it, and the losing side can appeal to a DAO.
+
+<Note>
+Enzure runs on NEAR testnet. It is not on mainnet yet.
+</Note>
+
+## Features
+
+- **Bonded statements.** Post a statement with a bond. If nobody disputes it in time, it settles as true.
+- **Verified AI Verdict.** A NEAR AI model in a TEE rules on each dispute, and the contract checks the model's signature itself.
+- **DAO appeals.** The losing side can appeal the AI Verdict. A DAO makes the final ruling.
+- **Cross-chain settlement.** Outcomes reach contracts on NEAR, or EVM chains through Chain Signatures, with no bridge.
+- **No operator needed.** Anyone can settle, submit a verdict or deliver a result, so nothing waits on one service.
+
+## Start here
+
+<Columns cols={3}>
+  <Card title="How it works" icon="workflow" href="/how-it-works">
+    The four steps every statement goes through.
+  </Card>
+  <Card title="Use cases" icon="lightbulb" href="/use-cases">
+    Agents, markets, DeFi, insurance and more.
+  </Card>
+  <Card title="Integration" icon="plug" href="/developers/integration">
+    Act on outcomes in your NEAR or EVM contract.
+  </Card>
+</Columns>

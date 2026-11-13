@@ -1,0 +1,26 @@
+---
+title: "Enzure deployments on NEAR testnet"
+sidebarTitle: "Deployments"
+description: "The Enzure oracle, DAO and storage service on NEAR testnet, the oracle's EVM address, and the parts that are not deployed yet."
+keywords: ["deployments", "addresses", "testnet", "oracle", "DAO"]
+icon: "server"
+---
+
+Enzure runs on NEAR testnet. Nothing is on mainnet yet.
+
+| What | Address |
+| --- | --- |
+| Oracle | `oracle-1794575543.enzure-council-a-1794575224.testnet` |
+| DAO (Sputnik DAO v2) | `enzure-1794575224.sputnikv2.testnet` |
+| Storage service | `https://enzure-storage.luckzivanius.workers.dev` |
+| Oracle's EVM address | `0xf4848c5be2f0bc003a4f071f10ca3a7101a41e5a` |
+
+The oracle has no full-access keys, so only the DAO can change it. The EVM address is derived through Chain Signatures and is the same on every EVM chain. Receivers only accept results signed by it.
+
+## Not deployed yet
+
+- Receiver on Base Sepolia
+- Web app
+- Keeper service
+
+All three run locally from the [repository](https://github.com/0verlabs/enzure).

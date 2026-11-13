@@ -1,0 +1,34 @@
+---
+title: "Settle a statement and withdraw your bond"
+sidebarTitle: "Settle and withdraw"
+description: "Call settle once an Enzure statement's last window closes, then withdraw your balance. Anyone can settle, so it doesn't have to be you."
+keywords: ["settle", "withdraw", "balance", "payout"]
+icon: "circle-check"
+---
+
+A statement settles when someone calls `settle` after its last window closes. Anyone can call it. Settlement credits the bonds to balances inside the oracle and notifies the contracts named in its Hooks.
+
+## Settle
+
+```bash
+near contract call-function as-transaction oracle-1794575543.enzure-council-a-1794575224.testnet \
+  settle json-args '{"assertion_id":7}' \
+  prepaid-gas '300.0 Tgas' attached-deposit '0 NEAR' \
+  sign-as <your-account>.testnet network-config testnet sign-with-keychain send
+```
+
+It returns the outcome, `true` or `false`. It fails if a window is still open or the statement is waiting for an AI Verdict.
+
+## Withdraw
+
+Check your balance, then withdraw it. `withdraw` needs exactly 1 yoctoNEAR attached.
+
+```bash
+near contract call-function as-read-only oracle-1794575543.enzure-council-a-1794575224.testnet \
+  get_balance json-args '{"account_id":"<your-account>.testnet"}' network-config testnet now
+
+near contract call-function as-transaction oracle-1794575543.enzure-council-a-1794575224.testnet \
+  withdraw json-args '{}' \
+  prepaid-gas '30.0 Tgas' attached-deposit '1 yoctoNEAR' \
+  sign-as <your-account>.testnet network-config testnet sign-with-keychain send
+```
