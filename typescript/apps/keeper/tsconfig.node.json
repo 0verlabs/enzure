@@ -1,0 +1,30 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "target": "esnext",
+    "lib": ["es2024"],
+    "moduleDetection": "force",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "types": ["node"],
+    "paths": {
+      "@enzure/core": ["../../packages/core/src/index.ts"]
+    },
+    "strict": true,
+    "noUnusedLocals": true,
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "esModuleInterop": true,
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "skipLibCheck": true
+  },
+  "include": [
+    "src/main.ts",
+    "src/keeper.ts",
+    "src/config.ts",
+    "src/chains.ts",
+    "tests",
+    "vite.config.ts"
+  ]
+}

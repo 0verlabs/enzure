@@ -17,7 +17,7 @@ Built for NEAR HACKATHON (2026-11-01 to 2026-11-14). Everything runs on NEAR tes
 | Storage service (Cloudflare Worker + R2) | Deployed: `https://enzure-storage.luckzivanius.workers.dev`, serving `GET /content/{sha256}` ([example](https://enzure-storage.luckzivanius.workers.dev/content/6737fd606296d5e1ea3ac20f470896757bf8fcd0b84b81da863b54db62178caa)) |
 | Receiver, escrow and test USDC (Solidity, Base Sepolia) | **Not deployed.** There was no funded Base Sepolia key. The escrow runs below used a local anvil chain with chain id 84532 for the EVM side. |
 | Web app (TanStack Start, Cloudflare) | **Not deployed.** It runs locally (see [Web app](#web-app)). |
-| Keeper service (Node, Render) | **Not deployed.** The Render Blueprint is in `render.yaml`. The recorded runs ran the Keeper locally. |
+| Keeper service (Cloudflare Workers, Durable Object alarm) | **Not deployed.** `scripts/deploy-keeper.sh` deploys it as `enzure-keeper` (ADR 0006). The recorded runs ran the Keeper locally. |
 | Tests | `./scripts/test.sh` runs the Rust sandbox, Foundry and Vite+ suites. |
 
 ## The problem
@@ -186,7 +186,7 @@ All on NEAR testnet unless noted.
 | Storage service | `https://enzure-storage.luckzivanius.workers.dev` | `PUT`/`GET /content/{sha256}`; other paths return 404. Cloudflare Worker with R2. |
 | Receiver, escrow, test USDC on Base Sepolia (84532) | none | Not deployed. `scripts/deploy-receiver.sh` and `examples/escrow/demo.sh` deploy them with a funded key. The addresses in Assertions 2 to 5 (`0x5fbdb231…0aa3`, `0x0dcd1bf9…cd82`) are on a local anvil chain and have no code on Base Sepolia. |
 | Web app | none | Not deployed (would be `enzure-web` on Cloudflare Workers). |
-| Keeper | none | Not deployed (Render background worker `enzure-keeper` in `render.yaml`). |
+| Keeper | none | Not deployed (Worker `enzure-keeper`, `typescript/apps/keeper`). |
 | Development oracles | `oracle-1794571590.enzure-keeper-1794571407.testnet`, `oracle-1794568696.enzure-evm-1794568684.testnet` | Used for the Keeper run and the Chain Signatures fixture. Their DAO is a single account and they still have full-access keys; they are not the demo deployment. |
 
 ## Recorded testnet runs
@@ -265,7 +265,7 @@ The layout follows [ADR 0005](docs/adr/0005-hybrid-monorepo-layout-and-stack.md)
 | `typescript/packages/core/` | Business logic as functions: building the AI request, checking signatures, encoding the result message, deciding which calls are due, reading oracle state, the Resolver and Relayer. | Library |
 | `typescript/apps/storage/` | Storage service: Hono with Zod on a Cloudflare Worker with R2. | Cloudflare (deployed) |
 | `typescript/apps/web/` | Web app: TanStack Start with Tailwind and shadcn/ui, NEAR wallet connection. | Cloudflare (not deployed) |
-| `typescript/apps/keeper/` | Keeper: Resolver, Scheduler and Relayer in one Node process with near-kit and viem. | Render background worker (not deployed) |
+| `typescript/apps/keeper/` | Keeper: Resolver, Scheduler and a Relayer per chain, run by a Durable Object alarm, with near-kit and viem. | Cloudflare (not deployed) |
 | `examples/escrow/` | The escrow demo: escrow and test USDC (Foundry), buyer script, seller agent, `demo.sh`. | Base Sepolia (planned), local |
 | `examples/near-consumer/`, `examples/evm-consumer/` | Minimal Consumers for NEAR Hooks and EVM Hooks. | |
 | `scripts/` | Test, deploy, DAO and check scripts. `scripts/test.sh` runs every suite. | Your machine |
@@ -286,7 +286,7 @@ All code in this repository was written from 2026-11-12 on, during the hackathon
   - keeper: [near-kit](https://kit.near.tools), viem.
   - web: [TanStack Start](https://tanstack.com/start) and TanStack Router, React 19, Tailwind CSS 4, [shadcn/ui](https://ui.shadcn.com) with radix-ui, class-variance-authority, lucide-react, tw-animate-css, the Geist font (@fontsource-variable/geist), @hot-labs/near-connect, near-connect-hooks, near-api-js.
 - Escrow demo scripts: plain Node, loading viem from core and near-kit from the Keeper.
-- Services used: NEAR AI Cloud, NEAR Chain Signatures (`v1.signer-prod.testnet`), Sputnik DAO v2 (`sputnikv2.testnet`), FastNEAR RPC and transactions API, NearBlocks, Blockscout's Base Sepolia API, Circle's test USDC faucet, Cloudflare Workers and R2, Render.
+- Services used: NEAR AI Cloud, NEAR Chain Signatures (`v1.signer-prod.testnet`), Sputnik DAO v2 (`sputnikv2.testnet`), FastNEAR RPC and transactions API, NearBlocks, Blockscout's Base Sepolia API, Circle's test USDC faucet, Cloudflare Workers, Durable Objects and R2.
 
 **Templates and generated code:**
 

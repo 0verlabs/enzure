@@ -40,7 +40,7 @@
 #   AMOUNT             USDC for the job (1); BRIEF the job's brief
 #   LIVENESS_SECS      the Assertion's Liveness (60, the oracle's minimum)
 #   STORAGE_URL        the storage service (the deployed one)
-#   NO_KEEPER=1        don't start a Keeper; wait for one already running with the Relayer on
+#   NO_KEEPER=1        don't start a Keeper; wait for one already running with the Base Relayer on
 #   EVM_EXPLORER_TX    prefix for EVM transaction links (Basescan on chain 84532)
 #
 # NEAR cost: SELLER_BALANCE plus the buyer's 1 NEAR dispute bond and fees; the
@@ -105,6 +105,11 @@ buyer_evm="$(node -e '
   console.log(r("viem/accounts").privateKeyToAccount(process.env.EVM_PRIVATE_KEY).address);' \
   "$root/typescript/packages/core/package.json")"
 echo "Oracle $ORACLE_ACCOUNT_ID; EVM chain $chain_id at $EVM_RPC_URL; buyer $NEAR_ACCOUNT_ID / $buyer_evm" >&2
+# The Keeper relays this chain as Base, and refuses an RPC for any other chain.
+if [ -z "${NO_KEEPER:-}" ] && [ "$chain_id" != 84532 ] && [ "$chain_id" != 8453 ]; then
+  echo "error: EVM_RPC_URL serves chain $chain_id; the Keeper relays only Base (8453) or Base Sepolia (84532). Use anvil --chain-id 84532 locally" >&2
+  exit 1
+fi
 
 if [ -z "${RECEIVER_ADDRESS:-}" ]; then
   step "Deploying the Receiver for $ORACLE_ACCOUNT_ID"
@@ -164,8 +169,10 @@ add_links <<<"$dispute_json"
 keeper_log="$NEAR_KEYS_DIR/keeper.log"
 if [ -z "${NO_KEEPER:-}" ]; then
   step "Starting the Keeper with the Relayer on; it resolves, settles, signs and relays (log: $keeper_log)"
-  # Keys reach the Keeper through its environment, never its command line.
-  NEAR_NETWORK="$NEAR_NETWORK" POLL_INTERVAL_MS="${POLL_INTERVAL_MS:-5000}" node "$keeper" >"$keeper_log" 2>&1 &
+  # Keys reach the Keeper through its environment, never its command line. The buyer's
+  # EVM key pays the Relayer's gas on the chain at EVM_RPC_URL, which the Keeper takes as Base.
+  NEAR_NETWORK="$NEAR_NETWORK" POLL_INTERVAL_MS="${POLL_INTERVAL_MS:-5000}" \
+    BASE_RPC_URL="$EVM_RPC_URL" BASE_RELAYER_KEY="$EVM_PRIVATE_KEY" node "$keeper" >"$keeper_log" 2>&1 &
   keeper_pid=$!
   trap 'kill "$keeper_pid" 2>/dev/null || true; rm -rf "$NEAR_KEYS_DIR"' EXIT
 fi

@@ -1,7 +1,7 @@
 // Runs one Relayer pass: reads the oracle's Assertions on NEAR, and delivers
 // every signed EVM Hook for the EVM chain at EVM_RPC_URL to its Receiver,
 // skipping results the Receiver already recorded. The Keeper service runs the
-// same core function (`relayOnce`) in a loop.
+// same core function (`relayOnce`) on every pass, once per Relayer chain.
 //
 //   node scripts/relay-evm-hooks.mts <oracle-account-id>
 //
