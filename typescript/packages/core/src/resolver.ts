@@ -1,8 +1,8 @@
-import { checkContent, MAX_CONTENT_BYTES } from "./content.ts";
 import type { Verdict } from "./ai-request.ts";
 import type { OracleView } from "./relayer.ts";
 import type { OracleAssertion } from "./oracle-reads.ts";
 import { checkSignedResponse, type ResponseSignature } from "./signature.ts";
+import { fetchContent, type FetchedContent } from "./storage-client.ts";
 import { parseVerdict } from "./verdict.ts";
 
 /** NEAR AI Cloud's OpenAI-compatible API. */
@@ -185,26 +185,26 @@ async function download(
   name: string,
   hash: string,
 ): Promise<string> {
-  const response = await fetch(`${storageUrl.replace(/\/$/, "")}/content/${hash}`);
-  if (response.status === 404) throw new Skip(`${name} ${hash} is not in storage`);
-  if (!response.ok) throw new Error(`storage: HTTP ${response.status} for ${name} ${hash}`);
-  const length = Number(response.headers.get("content-length") ?? 0);
-  if (length > MAX_CONTENT_BYTES) {
-    await response.body?.cancel();
-    throw new Skip(`${name} ${hash} is too large (${length} bytes)`);
-  }
-  const bytes = new Uint8Array(await response.arrayBuffer());
-  const check = await checkContent(hash, bytes);
-  if (!check.ok) {
-    throw new Skip(
-      check.reason === "hash_mismatch"
-        ? `${name} from storage does not match ${hash} (got ${check.actual})`
-        : check.reason === "too_large"
-          ? `${name} ${hash} is too large (${check.size} bytes)`
-          : `${name} ${hash} is not UTF-8`,
+  let content: FetchedContent;
+  try {
+    content = await fetchContent({ storageUrl, fetch }, hash);
+  } catch (error) {
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)} for ${name} ${hash}`,
     );
   }
-  return new TextDecoder().decode(bytes);
+  switch (content.status) {
+    case "match":
+      return content.text;
+    case "missing":
+      throw new Skip(`${name} ${hash} is not in storage`);
+    case "mismatch":
+      throw new Skip(`${name} from storage does not match ${hash}`);
+    case "too_large":
+      throw new Skip(`${name} ${hash} is too large (${content.size} bytes)`);
+    case "not_utf8":
+      throw new Skip(`${name} ${hash} is not UTF-8`);
+  }
 }
 
 /** Reads a chat's ed25519 signature, retrying while NEAR AI Cloud hasn't recorded it yet. */

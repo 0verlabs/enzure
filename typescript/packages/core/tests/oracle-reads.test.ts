@@ -2,12 +2,14 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { expect, test } from "vite-plus/test";
 import {
+  MAX_CONTENT_BYTES,
   assertionEvents,
   assertionTimeline,
   fetchAssertionEvents,
   fetchContent,
   nearRpcView,
   putContent,
+  sha256Hex,
   timelineTransactions,
   type ExplorerTransaction,
   type OracleAssertion,
@@ -392,6 +394,37 @@ test("content whose bytes don't hash to the on-chain hash is marked as not match
   await expect(
     fetchContent({ storageUrl: "https://storage.example", fetch }, "ab".repeat(32)),
   ).resolves.toEqual({ status: "mismatch", text: "tampered" });
+});
+
+test("content over the size cap is refused from its Content-Length without reading it", async () => {
+  let read = false;
+  const body = new ReadableStream(
+    {
+      pull() {
+        read = true;
+      },
+    },
+    // Pull only when someone reads, not ahead of time.
+    { highWaterMark: 0 },
+  );
+  const { fetch } = fakeFetch(
+    () => new Response(body, { headers: { "content-length": String(MAX_CONTENT_BYTES + 1) } }),
+  );
+
+  await expect(
+    fetchContent({ storageUrl: "https://storage.example", fetch }, "ab".repeat(32)),
+  ).resolves.toEqual({ status: "too_large", size: MAX_CONTENT_BYTES + 1 });
+  expect(read).toBe(false);
+});
+
+test("content that hashes right but isn't UTF-8 is refused", async () => {
+  const bytes = new Uint8Array([0xff, 0xfe, 0x00]);
+  const hash = await sha256Hex(bytes);
+  const { fetch } = fakeFetch(() => new Response(bytes));
+
+  await expect(
+    fetchContent({ storageUrl: "https://storage.example", fetch }, hash),
+  ).resolves.toEqual({ status: "not_utf8" });
 });
 
 test("a settled Assertion's timeline ends with each Hook's delivery, by its index", () => {
