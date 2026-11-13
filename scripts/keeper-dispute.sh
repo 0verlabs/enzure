@@ -138,21 +138,11 @@ else
     console.log(JSON.stringify({ template }));' "$fixture")"
   call publish_prompt_template "$template" '1 yoctoNEAR'
   model="$(node -e 'console.log(JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")).model_id)' "$fixture")"
-  # The ed25519 key in the model's attestation report signs its responses.
-  attested="$(curl -fsS -H "Authorization: Bearer $NEARAI_API_KEY" \
-    "https://cloud-api.near.ai/v1/attestation/report?model=$(node -p 'encodeURIComponent(process.argv[1])' "$model")&signing_algo=ed25519&include_tls_fingerprint=false" |
-    node -e '
-      let s = "";
-      process.stdin.on("data", (d) => (s += d)).on("end", () => {
-        const keys = (JSON.parse(s).model_attestations ?? [])
-          .filter((a) => a.signing_algo === "ed25519")
-          .map((a) => a.signing_address.replace(/^0x/, "").toLowerCase());
-        console.log([...new Set(keys)].join(" "));
-      });')"
-  [ -n "$attested" ] || { echo "error: no ed25519 attestation for $model" >&2; exit 1; }
-  for key in $attested; do
-    call add_registered_key "{\"public_key\":\"$key\",\"model_id\":\"$model\"}" '1 yoctoNEAR'
-  done
+  # The ed25519 key in the model's attestation report signs its responses. The
+  # check reads NEARAI_API_KEY from the environment, so the key never reaches argv.
+  attested="$(node "$root/scripts/near-ai-attested-key.mts" --model "$model")" ||
+    { echo "error: no attested ed25519 key for $model" >&2; exit 1; }
+  call add_registered_key "{\"public_key\":\"$attested\",\"model_id\":\"$model\"}" '1 yoctoNEAR'
 fi
 
 step "Uploading the Claim and both Evidence items to $STORAGE_URL"

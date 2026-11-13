@@ -1,5 +1,5 @@
 import { expect, test } from "vite-plus/test";
-import { dueCalls, type OracleAssertion } from "../src/index.ts";
+import { dueCalls, type NearHookStatus, type OracleAssertion } from "../src/index.ts";
 
 const SEC = 1_000_000_000n;
 const T0 = 1_794_568_700n * SEC;
@@ -137,6 +137,30 @@ test("unsigned EVM Hooks of settled Assertions are due for sign_hook with its ga
       args: { assertion_id: 6, hook_index: 1 },
       gas: "300000000000000",
       deposit: "1",
+    },
+  ]);
+});
+
+test("pending NEAR Hooks of settled Assertions, left by a DAO ruling short of gas, are due for retry_near_hook", () => {
+  const near = (status: NearHookStatus) => ({
+    near: { consumer: "app.testnet", gas: "50000000000000", status },
+  });
+  const assertions = [
+    assertion(8, {
+      state: "settled",
+      outcome: true,
+      hooks: [near("delivered"), near("pending"), near("failed"), near("delivering")],
+    }),
+    // Before settlement every NEAR Hook is pending; nothing is due.
+    assertion(9, { hooks: [near("pending")] }),
+  ];
+
+  expect(dueCalls(assertions, { nowNs: T0 + 59n * SEC })).toEqual([
+    {
+      method: "retry_near_hook",
+      args: { assertion_id: 8, hook_index: 1 },
+      gas: "300000000000000",
+      deposit: "0",
     },
   ]);
 });

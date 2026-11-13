@@ -14,37 +14,13 @@ import { Button } from "@/components/ui/button";
 import { Spinner } from "@/components/ui/spinner";
 import { config, evmAddressUrl } from "@/config";
 import { RETRY_HOOK_GAS, formatTime, oracle, shortHash } from "@/lib/oracle";
-import { useWallet } from "@/lib/wallet";
+import { useOracleAction } from "@/lib/oracle-action";
 
 type NearHookStep = Extract<TimelineStep, { kind: "near_hook" }>;
 type EvmHookStep = Extract<TimelineStep, { kind: "evm_hook" }>;
 
 /** How often an undelivered EVM Hook re-reads its Receiver. */
 const DELIVERY_REFRESH_MS = 15_000;
-
-/** Sends one oracle call from the wallet and reports its transaction, result and error. */
-function useOracleAction(onDone: () => void) {
-  const wallet = useWallet();
-  const [pending, setPending] = useState(false);
-  const [error, setError] = useState<unknown>(null);
-  const [sent, setSent] = useState<{ hash: string; value: unknown } | null>(null);
-
-  async function run(call: Parameters<typeof wallet.call>[0]) {
-    setPending(true);
-    setError(null);
-    try {
-      const { transactionHash, value } = await wallet.call(call);
-      setSent({ hash: transactionHash, value });
-      onDone();
-    } catch (cause) {
-      setError(cause);
-    } finally {
-      setPending(false);
-    }
-  }
-
-  return { wallet, pending, error, sent, run };
-}
 
 const NEAR_STATUS = {
   pending: { label: "Pending", variant: "outline" },
@@ -53,7 +29,7 @@ const NEAR_STATUS = {
   failed: { label: "Failed", variant: "destructive" },
 } as const;
 
-/** A NEAR Hook's delivery to its Consumer, with a retry button once it failed. */
+/** A NEAR Hook's delivery to its Consumer, with a button to deliver it if it failed or never started. */
 export function NearHookDetail({
   assertionId,
   step,
@@ -74,7 +50,8 @@ export function NearHookDetail({
           to <Account id={step.consumer} />
         </span>
       </span>
-      {step.status === "failed" ? (
+      {/* Hook steps exist only once settled; a pending one is a NEAR Hook a DAO ruling had no gas to start. */}
+      {step.status === "failed" || step.status === "pending" ? (
         <span className="flex flex-wrap items-center gap-3">
           <Button
             size="sm"
@@ -90,10 +67,10 @@ export function NearHookDetail({
             }
           >
             {action.pending ? <Spinner data-icon="inline-start" /> : null}
-            Retry delivery
+            {step.status === "failed" ? "Retry delivery" : "Deliver"}
           </Button>
           {!action.wallet.accountId && !action.wallet.loading ? (
-            <span>Connect a wallet to retry.</span>
+            <span>Connect a wallet to {step.status === "failed" ? "retry" : "deliver it"}.</span>
           ) : null}
         </span>
       ) : null}

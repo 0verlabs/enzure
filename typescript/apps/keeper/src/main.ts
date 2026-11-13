@@ -19,12 +19,12 @@ import {
 import { Near, type FinalExecutionOutcome } from "near-kit";
 import { createPublicClient, createWalletClient, defineChain, http } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
-import { loadConfig } from "./config.ts";
+import { loadConfig, type KeeperConfig } from "./config.ts";
 
 type Log = Record<string, unknown> & { event: string };
 const log = (entry: Log) => console.log(JSON.stringify({ at: new Date().toISOString(), ...entry }));
 
-let config: ReturnType<typeof loadConfig>;
+let config: KeeperConfig;
 try {
   config = loadConfig(process.env);
 } catch (error) {
@@ -77,7 +77,7 @@ const relayer = config.relayer && (await relayerClients(config.relayer));
 async function relayerClients({
   evmRpcUrl,
   evmPrivateKey,
-}: NonNullable<typeof config.relayer>): Promise<RelayerClients> {
+}: NonNullable<KeeperConfig["relayer"]>): Promise<RelayerClients> {
   const transport = http(evmRpcUrl);
   const chainId = await createPublicClient({ transport }).getChainId();
   const chain = defineChain({
@@ -103,6 +103,8 @@ async function chainTimeNs(): Promise<bigint> {
 }
 
 async function pass(): Promise<void> {
+  // One listing per pass, shared by the Scheduler, the Resolver and the Relayer.
+  // A Hook signed during this pass is relayed on the next one.
   const assertions = await listAssertions<OracleAssertion>(view);
 
   // Scheduler: settle, check_timeout and sign_hook as soon as they are callable.
@@ -122,7 +124,7 @@ async function pass(): Promise<void> {
 
   // Relayer: deliver signed EVM Hooks to their Receivers.
   if (relayer) {
-    for (const { hook, result } of await relayOnce(view, relayer)) {
+    for (const { hook, result } of await relayOnce(view, relayer, { assertions })) {
       log({ event: `relayer_${result.status}`, ...hook, ...result });
     }
   }

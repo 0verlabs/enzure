@@ -286,3 +286,14 @@ test("a Relayer pass pages through older Assertions", async () => {
     { limit: 2, before_id: 2 },
   ]);
 });
+
+test("a Relayer pass given the Assertions already listed doesn't list them again", async () => {
+  const listed = [assertion(1, "settled", [nearHook, evmHook("signed")])];
+  const oracle = fakeOracle(listed, { "1/1": signed() });
+  const chain = fakeChain();
+
+  const results = await relayOnce(oracle.view, chain, { assertions: listed });
+
+  expect(results.map((r) => r.result.status)).toEqual(["delivered"]);
+  expect(oracle.calls.map((c) => c.method)).toEqual(["get_signed_result"]);
+});

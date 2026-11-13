@@ -633,6 +633,11 @@ async fn check_timeout_sends_a_disputed_assertion_with_no_ai_verdict_to_appeal()
             &world.assertion(id).await?["dispute"]["ai_verdict_deadline_ns"],
         ))
         .await?;
+    // From the AI Verdict deadline on, a verdict is too late: the Assertion
+    // goes to Appeal instead.
+    let too_late = s.submit(id, &content, "TRUE").await?;
+    assert!(failure_message(too_late).contains("AI Verdict deadline has passed"));
+    assert_eq!(world.assertion(id).await?["state"], "disputed");
     // Anyone can call it.
     let timed_out = s.check_timeout(id).await?;
     let events = enzure_events(&timed_out);
@@ -721,20 +726,6 @@ async fn the_daos_ruling_delivers_near_hooks_and_allows_evm_hook_signing() -> Te
     let early = evm.sign_hook(&resolver, id, 1, ONE_YOCTO).await?;
     assert!(failure_message(early).contains("not settled"));
 
-    // Too little gas for the NEAR Hook: rejected, still in Appeal.
-    let starved = world
-        .call_contract_with_gas(
-            &world.dao,
-            &world.oracle,
-            "resolve_appeal",
-            json!({ "assertion_id": id, "truthful": true }),
-            ONE_YOCTO,
-            near_api::NearGas::from_tgas(30),
-        )
-        .await?;
-    assert!(failure_message(starved).contains("to deliver the NEAR Hooks"));
-    assert_eq!(world.assertion(id).await?["state"], "in_appeal");
-
     let ruled = world
         .call(
             &world.dao,
@@ -762,6 +753,113 @@ async fn the_daos_ruling_delivers_near_hooks_and_allows_evm_hook_signing() -> Te
     let result = evm.signed_result(id, 1).await?;
     assert_eq!(result["outcome"], true);
     assert_eq!(result["assertion_id"], id);
+    Ok(())
+}
+
+/// A Sputnik proposal gives `resolve_appeal` a fixed amount of gas (the
+/// scripts give 150 TGas), often less than the NEAR Hooks need. The ruling
+/// still settles the Assertion; Hooks it had no gas for stay pending, and
+/// anyone delivers them with `retry_near_hook`, each with its fixed gas.
+#[tokio::test]
+async fn the_daos_ruling_settles_even_without_gas_for_every_near_hook() -> TestResult {
+    let s = setup_default().await?;
+    let world = &s.world;
+    let mut consumers = Vec::new();
+    for name in ["first", "second", "third", "fourth"] {
+        consumers.push(world.deploy(name, switchable_consumer_wasm(), None).await?);
+    }
+    let hooks: Vec<Value> = consumers
+        .iter()
+        .map(|c| json!({ "near": { "consumer": c, "gas": near_api::NearGas::from_tgas(50) } }))
+        .collect();
+    let content = Content::new("The sky is green.", None, None);
+    let id: u64 = world
+        .call(
+            &s.asserter,
+            "assert_claim",
+            json!({
+                "claim_hash": sha256_hex(&content.claim),
+                "bond": BOND,
+                "liveness": 600,
+                "hooks": hooks,
+            }),
+            BOND.saturating_add(world.storage_deposit_for(4).await?),
+        )
+        .await?
+        .json()?;
+    world.dispute_ok(&s.disputer, id, &content, BOND).await?;
+    s.submit(id, &content, "UNRESOLVABLE").await?.assert_success();
+
+    let ruled = world
+        .call_contract_with_gas(
+            &world.dao,
+            &world.oracle,
+            "resolve_appeal",
+            json!({ "assertion_id": id, "truthful": true }),
+            ONE_YOCTO,
+            near_api::NearGas::from_tgas(150),
+        )
+        .await?;
+    assert!(ruled.clone().json::<bool>()?);
+    let assertion = world.assertion(id).await?;
+    assert_eq!(assertion["state"], "settled");
+    assert_eq!(assertion["outcome"], true);
+    let half = yocto(BOND.as_yoctonear() / 2);
+    assert_eq!(s.balances().await?, [BOND.saturating_add(half), ZERO, half]);
+    let statuses: Vec<Value> = assertion["hooks"]
+        .as_array()
+        .expect("hooks list")
+        .iter()
+        .map(|hook| hook["near"]["status"].clone())
+        .collect();
+    let delivered = statuses.iter().filter(|s| *s == "delivered").count();
+    assert!(
+        (1..4).contains(&delivered)
+            && statuses.iter().all(|s| s == "delivered" || s == "pending"),
+        "{statuses:?}"
+    );
+    let delivered_events = enzure_events(&ruled)
+        .into_iter()
+        .filter(|(name, _)| name == "near_hook_delivered")
+        .count();
+    assert_eq!(delivered_events, delivered);
+
+    // Anyone delivers the pending Hooks, each with exactly its fixed gas.
+    for (index, status) in statuses.iter().enumerate() {
+        if status == "pending" {
+            let retried = world
+                .call(
+                    &s.resolver,
+                    "retry_near_hook",
+                    json!({ "assertion_id": id, "hook_index": index }),
+                    ZERO,
+                )
+                .await?;
+            assert!(retried.json::<bool>()?, "Hook {index}");
+        }
+    }
+    for consumer in &consumers {
+        let deliveries: Value = world
+            .view_contract(consumer, "get_deliveries", json!({}))
+            .await?;
+        assert_eq!(
+            deliveries,
+            json!([{
+                "assertion_id": id,
+                "truthful": true,
+                "prepaid_gas": near_api::NearGas::from_tgas(50).as_gas().to_string(),
+            }])
+        );
+    }
+    let again = world
+        .call(
+            &s.resolver,
+            "retry_near_hook",
+            json!({ "assertion_id": id, "hook_index": 0 }),
+            ZERO,
+        )
+        .await?;
+    assert!(failure_message(again).contains("already delivered"));
     Ok(())
 }
 

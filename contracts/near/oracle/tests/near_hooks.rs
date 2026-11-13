@@ -483,3 +483,48 @@ async fn the_dao_sets_the_hook_limits() -> TestResult {
         .assert_success();
     Ok(())
 }
+
+/// `settle` needs Σ(Hook gas + 15 TGas) + 20 TGas, and a transaction carries
+/// at most 300 TGas, so the DAO can't allow Hooks no settlement could carry.
+#[tokio::test]
+async fn the_dao_cant_allow_more_hook_gas_than_a_settlement_can_carry() -> TestResult {
+    let world = World::new().await?;
+    let set_limits = |max_hooks: u32, tgas: u64| {
+        let world = &world;
+        async move {
+            world
+                .call(
+                    &world.dao,
+                    "set_config",
+                    json!({ "config": {
+                        "min_bond": NearToken::from_near(1),
+                        "default_liveness": 7200,
+                        "max_hooks": max_hooks,
+                        "max_near_hook_gas": NearGas::from_tgas(tgas),
+                        "appeal_window": 86400,
+                        "ai_verdict_deadline": 3600,
+                        "dao_deadline": 604800,
+                    } }),
+                    ONE_YOCTO,
+                )
+                .await
+        }
+    };
+    // 4 × (50 + 15) + 20 = 280 TGas: the defaults, the most allowed.
+    set_limits(4, 50).await?.assert_success();
+    set_limits(1, 245).await?.assert_success();
+    for (max_hooks, tgas) in [(4, 51), (5, 50), (1, 246), (100, 1)] {
+        let rejected = set_limits(max_hooks, tgas).await?;
+        assert!(
+            failure_message(rejected).contains("must fit in 280000000000000 gas"),
+            "{max_hooks} Hooks of {tgas} TGas"
+        );
+    }
+    // No Hooks at all need no gas, whatever the per-Hook limit.
+    set_limits(0, 1000).await?.assert_success();
+    assert_eq!(
+        world.view::<Value>("get_config", json!({})).await?["max_hooks"],
+        0
+    );
+    Ok(())
+}

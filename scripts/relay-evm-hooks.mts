@@ -14,8 +14,8 @@
 
 import { createRequire } from "node:module";
 import {
+  nearRpcView,
   relayOnce,
-  type OracleView,
   type RelayerClients,
 } from "../typescript/packages/core/src/index.ts";
 
@@ -37,32 +37,7 @@ if (!privateKey?.match(/^0x[0-9a-fA-F]{64}$/)) {
 const evmRpc = process.env.EVM_RPC_URL ?? "https://sepolia.base.org";
 const nearRpc = process.env.NEAR_RPC_URL ?? "https://rpc.testnet.near.org";
 
-const view: OracleView = async <T,>(method: string, args: Record<string, unknown>) => {
-  const response = await fetch(nearRpc, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: "enzure",
-      method: "query",
-      params: {
-        request_type: "call_function",
-        finality: "final",
-        account_id: oracle,
-        method_name: method,
-        args_base64: Buffer.from(JSON.stringify(args)).toString("base64"),
-      },
-    }),
-  });
-  const body = (await response.json()) as {
-    result?: { result?: number[]; error?: string };
-    error?: unknown;
-  };
-  if (!body.result?.result) {
-    throw new Error(`${oracle}.${method} failed: ${JSON.stringify(body.error ?? body.result)}`);
-  }
-  return JSON.parse(Buffer.from(body.result.result).toString("utf8")) as T;
-};
+const view = nearRpcView({ rpcUrl: nearRpc, contractId: oracle });
 
 const transport = viem.http(evmRpc);
 const chainId = await viem.createPublicClient({ transport }).getChainId();

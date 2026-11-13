@@ -17,12 +17,16 @@ services:
         - typescript/pnpm-lock.yaml
         - typescript/pnpm-workspace.yaml
         - render.yaml
-    # Node 26 ships without corepack, so pnpm is installed with npm. The filter
-    # installs only the Keeper and core, not the Cloudflare apps.
+    # Installs Vite+ (docs/toolchain.md: use vp, not a global pnpm); vp then
+    # fetches the pnpm and Node versions pinned in typescript/package.json.
+    # VP_HOME pins where it installs, VP_NODE_MANAGER=no skips its prompt. The
+    # filter installs only the Keeper and core, not the Cloudflare apps.
     buildCommand: >-
-      npm install --global pnpm@12.18.0 &&
-      pnpm install --frozen-lockfile --filter "@enzure/keeper..." &&
-      pnpm --filter @enzure/keeper run build
+      curl -fsSL https://vite.plus |
+      VP_VERSION=1.6.0 VP_NODE_MANAGER=no VP_HOME="$HOME/.vite-plus" bash &&
+      export PATH="$HOME/.vite-plus/bin:$PATH" &&
+      vp install --frozen-lockfile --filter "@enzure/keeper..." &&
+      vp run --filter @enzure/keeper build
     startCommand: node apps/keeper/dist/main.mjs
     envVars:
       - key: NODE_VERSION

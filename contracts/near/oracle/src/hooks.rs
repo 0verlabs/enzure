@@ -2,6 +2,9 @@
 //! `assertion_resolved(assertion_id, truthful)` on a NEAR Consumer with the gas
 //! the Asserter fixed when posting. Settlement commits before the call, so a
 //! failing Consumer never blocks or undoes it, and anyone can retry the Hook.
+//! `settle` needs the gas for every NEAR Hook; the DAO's `resolve_appeal`, whose
+//! gas a Sputnik proposal fixes, starts the ones its gas allows and leaves the
+//! rest for anyone to deliver with `retry_near_hook`.
 //! An EVM Hook is signed for an EVM chain's Receiver with `sign_hook`; see
 //! `evm_hooks.rs`.
 use near_sdk::serde_json::json;
@@ -26,6 +29,13 @@ const GAS_FOR_ON_NEAR_HOOK: Gas = Gas::from_tgas(10);
 const GAS_PER_NEAR_HOOK: Gas = Gas::from_tgas(15);
 /// Gas for the rest of `settle` or `retry_near_hook` when NEAR Hooks are due.
 const GAS_FOR_HOOK_CALLER: Gas = Gas::from_tgas(20);
+/// Gas `resolve_appeal` keeps for itself after starting the NEAR Hooks it can.
+const GAS_TO_FINISH: Gas = Gas::from_tgas(10);
+/// The most gas `settle` can need to deliver every NEAR Hook of an Assertion:
+/// a transaction carries at most 300 TGas, less a 20 TGas margin. `set_config`
+/// keeps `max_hooks` and `max_near_hook_gas` within it, so every Assertion can
+/// be settled, and every single NEAR Hook delivered, in one transaction.
+pub const MAX_GAS_TO_SETTLE: Gas = Gas::from_tgas(280);
 /// The method a NEAR Consumer implements.
 const CONSUMER_METHOD: &str = "assertion_resolved";
 
@@ -54,7 +64,9 @@ pub struct NearHook {
 #[serde(rename_all = "snake_case")]
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum NearHookStatus {
-    /// The Assertion hasn't settled yet.
+    /// Not started: the Assertion hasn't settled yet, or the DAO's ruling
+    /// settled it without the gas to start this Hook. Once settled, anyone can
+    /// deliver it with `retry_near_hook`.
     Pending,
     /// The call to the Consumer is in flight.
     Delivering,
@@ -137,6 +149,30 @@ pub(crate) fn validate(hooks: &[Hook], config: &Config) {
     }
 }
 
+/// Panics unless `max_hooks` NEAR Hooks of `max_near_hook_gas` each can be
+/// delivered by one `settle` within `MAX_GAS_TO_SETTLE`.
+pub(crate) fn validate_limits(config: &Config) {
+    if config.max_hooks == 0 {
+        return;
+    }
+    let required = config
+        .max_near_hook_gas
+        .saturating_add(GAS_PER_NEAR_HOOK)
+        .saturating_mul(u64::from(config.max_hooks))
+        .saturating_add(GAS_FOR_HOOK_CALLER);
+    require!(
+        required <= MAX_GAS_TO_SETTLE,
+        format!(
+            "max_hooks NEAR Hooks of max_near_hook_gas each must fit in {} gas to settle, \
+             counting {} gas per Hook and {} for the call; these need {}",
+            MAX_GAS_TO_SETTLE.as_gas(),
+            GAS_PER_NEAR_HOOK.as_gas(),
+            GAS_FOR_HOOK_CALLER.as_gas(),
+            required.as_gas()
+        )
+    );
+}
+
 /// The storage deposit for an Assertion's Hooks.
 pub(crate) fn storage_bytes(hooks: u32) -> u64 {
     HOOK_STORAGE_BYTES * u64::from(hooks)
@@ -172,15 +208,37 @@ pub(crate) fn require_gas_to_deliver(hooks: &[StoredHook]) {
 }
 
 /// Marks every NEAR Hook as delivering and calls its Consumer. EVM Hooks wait
-/// for `sign_hook`.
+/// for `sign_hook`. Run `require_gas_to_deliver` first.
 pub(crate) fn deliver_all(assertion_id: u64, outcome: bool, hooks: &mut [StoredHook]) {
+    deliver_near_hooks(assertion_id, outcome, hooks, |_| true);
+}
+
+/// Like `deliver_all`, but only for the NEAR Hooks the call's remaining gas can
+/// carry, in order, keeping `GAS_TO_FINISH` for the rest of the call. The
+/// others stay pending, for anyone to deliver with `retry_near_hook`.
+pub(crate) fn deliver_what_fits(assertion_id: u64, outcome: bool, hooks: &mut [StoredHook]) {
+    deliver_near_hooks(assertion_id, outcome, hooks, |hook| {
+        let remaining = env::prepaid_gas().saturating_sub(env::used_gas());
+        remaining
+            >= hook
+                .gas
+                .saturating_add(GAS_PER_NEAR_HOOK)
+                .saturating_add(GAS_TO_FINISH)
+    });
+}
+
+fn deliver_near_hooks(
+    assertion_id: u64,
+    outcome: bool,
+    hooks: &mut [StoredHook],
+    mut fits: impl FnMut(&NearHook) -> bool,
+) {
     for (index, hook) in hooks.iter_mut().enumerate() {
-        match hook {
-            StoredHook::Near { hook, status } => {
-                *status = NearHookStatus::Delivering;
-                deliver(assertion_id, index as u32, hook, outcome).detach();
-            }
-            StoredHook::Evm(_) => {}
+        if let StoredHook::Near { hook, status } = hook
+            && fits(hook)
+        {
+            *status = NearHookStatus::Delivering;
+            deliver(assertion_id, index as u32, hook, outcome).detach();
         }
     }
 }
@@ -206,7 +264,8 @@ fn deliver(assertion_id: u64, hook_index: u32, hook: &NearHook, outcome: bool) -
 
 #[near]
 impl Oracle {
-    /// Delivers a NEAR Hook again after it failed. Anyone can call it. The
+    /// Delivers a NEAR Hook of a settled Assertion that failed, or that the
+    /// settlement had no gas to start (still pending). Anyone can call it. The
     /// transaction's result is true if the Consumer accepted the call.
     pub fn retry_near_hook(&mut self, assertion_id: u64, hook_index: u32) -> Promise {
         let assertion = self
@@ -223,9 +282,9 @@ impl Oracle {
             ));
         };
         match status {
-            NearHookStatus::Failed => {}
+            NearHookStatus::Pending | NearHookStatus::Failed => {}
             NearHookStatus::Delivered => env::panic_str("NEAR Hook is already delivered"),
-            _ => env::panic_str("NEAR Hook is being delivered"),
+            NearHookStatus::Delivering => env::panic_str("NEAR Hook is being delivered"),
         }
         require_gas_for(std::iter::once(&*hook));
         *status = NearHookStatus::Delivering;

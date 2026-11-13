@@ -11,7 +11,7 @@
 // network access; the RPC defaults to NEAR testnet.
 
 import { parseArgs } from "node:util";
-import { evmAddressFromPublicKey } from "../typescript/packages/core/src/index.ts";
+import { evmAddressFromPublicKey, nearRpcView } from "../typescript/packages/core/src/index.ts";
 
 const { values, positionals } = parseArgs({
   allowPositionals: true,
@@ -23,32 +23,9 @@ if (!oracle) {
   process.exit(2);
 }
 
-async function view<T>(accountId: string, method: string, args: unknown): Promise<T> {
-  const response = await fetch(values.rpc, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: "enzure",
-      method: "query",
-      params: {
-        request_type: "call_function",
-        finality: "final",
-        account_id: accountId,
-        method_name: method,
-        args_base64: Buffer.from(JSON.stringify(args)).toString("base64"),
-      },
-    }),
-  });
-  const body = (await response.json()) as {
-    result?: { result?: number[]; error?: string };
-    error?: unknown;
-  };
-  if (!body.result?.result) {
-    throw new Error(`${accountId}.${method} failed: ${JSON.stringify(body.error ?? body.result)}`);
-  }
-  return JSON.parse(Buffer.from(body.result.result).toString("utf8")) as T;
-}
+/** A view call on any account through core's NEAR RPC reader. */
+const view = <T,>(accountId: string, method: string, args: Record<string, unknown>) =>
+  nearRpcView({ rpcUrl: values.rpc, contractId: accountId })<T>(method, args);
 
 const { signer, path, domain_id } = await view<{
   signer: string;

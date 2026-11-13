@@ -1,3 +1,4 @@
+import { NEAR_AI_URL } from "./resolver.ts";
 import { bytesToHex, hexToBytes } from "./signature.ts";
 
 /** One entry of `model_attestations[]` in a NEAR AI Cloud attestation report. */
@@ -71,6 +72,78 @@ export function checkAttestedSigner(
     reportDataBindsKey,
     valid: candidates.length === 1 && nonceEchoed && reportDataBindsKey,
   };
+}
+
+export type AttestedSigningKey =
+  | { ok: true; key: string; check: AttestedSignerCheck }
+  | { ok: false; error: string; check?: AttestedSignerCheck };
+
+/**
+ * The ed25519 key an attestation report names as `modelId`'s signer, as 64
+ * lowercase hex characters without `0x`, once {@link checkAttestedSigner}
+ * accepts it for `nonce`. Fails unless the report names exactly one such key.
+ */
+export function attestedSigningKey(
+  report: AttestationReport,
+  { modelId, nonce }: { modelId: string; nonce: string },
+): AttestedSigningKey {
+  const keys = [
+    ...new Set(
+      (report.model_attestations ?? [])
+        .filter((entry) => entry.signing_algo === "ed25519" && entry.model_name === modelId)
+        .map((entry) => entry.signing_address.replace(/^0x/, "").toLowerCase()),
+    ),
+  ];
+  if (keys.length !== 1) {
+    return {
+      ok: false,
+      error: `expected one ed25519 attestation for ${modelId}, got ${keys.length}`,
+    };
+  }
+  const [key] = keys as [string];
+  const check = checkAttestedSigner(report, { modelId, signingKey: key, nonce });
+  if (!check.valid) return { ok: false, error: `the attestation check failed for ${key}`, check };
+  return { ok: true, key, check };
+}
+
+/**
+ * Fetches `modelId`'s ed25519 attestation report from NEAR AI Cloud for a
+ * NEAR-operated model, echoing `nonce` (64 hex characters), with aliasing off
+ * so the report is for the model asked for.
+ */
+export async function fetchAttestationReport({
+  apiKey,
+  modelId,
+  nonce,
+  nearAiUrl = NEAR_AI_URL,
+  fetch = globalThis.fetch,
+}: {
+  apiKey: string;
+  modelId: string;
+  nonce: string;
+  /** Defaults to {@link NEAR_AI_URL}. */
+  nearAiUrl?: string;
+  fetch?: typeof globalThis.fetch;
+}): Promise<AttestationReport> {
+  const url = new URL(`${nearAiUrl.replace(/\/$/, "")}/attestation/report`);
+  url.search = new URLSearchParams({
+    model: modelId,
+    provider: "near",
+    signing_algo: "ed25519",
+    include_tls_fingerprint: "false",
+    nonce,
+  }).toString();
+  const response = await fetch(url.toString(), {
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      Accept: "application/json",
+      "x-no-aliasing": "true",
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`attestation report: HTTP ${response.status} ${await response.text()}`);
+  }
+  return (await response.json()) as AttestationReport;
 }
 
 const TDX_TEE_TYPE = 0x81;

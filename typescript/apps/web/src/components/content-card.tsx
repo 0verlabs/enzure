@@ -78,7 +78,11 @@ function ContentItem({ item }: { item: Item }) {
             <p className="text-sm text-muted-foreground">
               {content.status === "missing"
                 ? "Storage has nothing under this hash."
-                : `Couldn't read storage: ${content.message}`}
+                : content.status === "too_large"
+                  ? `Too large to use as Claim or Evidence (${content.size} bytes).`
+                  : content.status === "not_utf8"
+                    ? "Matches the hash, but isn't UTF-8 text."
+                    : `Couldn't read storage: ${content.message}`}
             </p>
           )}
         </>

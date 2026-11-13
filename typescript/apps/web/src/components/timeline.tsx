@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Spinner } from "@/components/ui/spinner";
 import { config } from "@/config";
-import { formatNear, formatTime, shortHash } from "@/lib/oracle";
+import { formatNear, formatTime, hookStatus, shortHash } from "@/lib/oracle";
 
 interface StepView {
   title: string;
@@ -211,9 +211,7 @@ export function useAssertionEvents(assertion: OracleAssertion) {
   const [events, setEvents] = useState<OracleEvent[] | null>(null);
   const [failed, setFailed] = useState(false);
   // Re-read when the Assertion moves on, so new steps get their links.
-  const hooks = (assertion.hooks ?? [])
-    .map((hook) => ("near" in hook ? hook.near.status : hook.evm.status))
-    .join(",");
+  const hooks = (assertion.hooks ?? []).map(hookStatus).join(",");
   const key = `${assertion.id}:${assertion.state}:${assertion.ai_verdicts?.length ?? 0}:${hooks}`;
   useEffect(() => {
     let cancelled = false;

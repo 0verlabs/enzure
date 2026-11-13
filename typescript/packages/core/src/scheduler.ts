@@ -3,13 +3,13 @@ import { SIGN_HOOK_DEPOSIT_YOCTO, SIGN_HOOK_GAS, evmHooksToSign } from "./relaye
 
 /** A permissionless oracle call that is due now, with the gas (yoctoNEAR deposit) to attach. */
 export interface DueCall {
-  method: "settle" | "check_timeout" | "sign_hook";
+  method: "settle" | "check_timeout" | "sign_hook" | "retry_near_hook";
   args: { assertion_id: number; hook_index?: number };
   gas: string;
   deposit: string;
 }
 
-/** Gas for `settle` and `check_timeout`: `settle` must also have room to start the NEAR Hooks. */
+/** Gas for `settle`, `check_timeout` and `retry_near_hook`: `settle` must also have room to start the NEAR Hooks. */
 export const SCHEDULER_GAS = "300000000000000";
 
 export interface DueCallOptions {
@@ -23,7 +23,10 @@ export interface DueCallOptions {
  * Assertion from the end of Liveness, for a ruled one from the end of its
  * Appeal Window and for one In Appeal from its DAO deadline; `check_timeout`
  * for a disputed Assertion with no AI Verdict from its dispute's AI Verdict
- * deadline; `sign_hook` for every unsigned EVM Hook of a settled Assertion.
+ * deadline; `sign_hook` for every unsigned EVM Hook of a settled Assertion;
+ * `retry_near_hook` for every pending NEAR Hook of a settled Assertion, which
+ * a DAO ruling with too little gas leaves for anyone to deliver (failed ones
+ * are left alone: their Consumer rejected the call).
  * Every deadline is read from the Assertion, where the oracle fixed it when
  * the timer started.
  */
@@ -60,6 +63,15 @@ export function dueCalls(
       nowNs >= BigInt(assertion.dispute.ai_verdict_deadline_ns)
     ) {
       calls.push(call("check_timeout"));
+    } else if (assertion.state === "settled") {
+      assertion.hooks.forEach((hook, hookIndex) => {
+        if ("near" in hook && hook.near.status === "pending") {
+          calls.push({
+            ...call("retry_near_hook"),
+            args: { assertion_id: assertion.id, hook_index: hookIndex },
+          });
+        }
+      });
     }
   }
   for (const hook of evmHooksToSign(assertions)) {
