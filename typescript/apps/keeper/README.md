@@ -40,7 +40,7 @@ node --env-file=../.env apps/keeper/dist/main.mjs   # ORACLE_ACCOUNT_ID etc. in 
 
 ## Deploy to Render
 
-`render.yaml` defines the worker `enzure-keeper` (Node 26.13.1, starter plan, root `typescript/`). Create a Blueprint from the repository in the Render dashboard and fill in the `sync: false` secrets when asked. The build installs pnpm 12.18.0 with npm, installs only the Keeper and core, and bundles core into `apps/keeper/dist/main.mjs`.
+`render.yaml` defines the worker `enzure-keeper` (Node 26.13.1, starter plan, root `typescript/`). Create a Blueprint from the repository in the Render dashboard and fill in the `sync: false` secrets when asked. The build installs Vite+ 1.6.0 with its install script, which then uses the pnpm pinned in `typescript/package.json`, installs only the Keeper and core, and bundles core into `apps/keeper/dist/main.mjs`. The same build command was run in a clean environment (empty `HOME`, no Node or pnpm on `PATH`) on macOS; it hasn't run on Render.
 
 Not deployed yet: there are no Render credentials for this project.
 
