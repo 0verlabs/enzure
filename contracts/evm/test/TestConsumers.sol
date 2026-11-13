@@ -30,12 +30,18 @@ contract SwitchableConsumer is IEnzureConsumer {
     }
 }
 
-/// @notice Test Consumer that burns gas until the call runs out.
-contract GasBurningConsumer is IEnzureConsumer {
-    uint256 public calls;
+/// @notice Test Consumer that records the gas it was given.
+contract GasReportingConsumer is IEnzureConsumer {
+    uint256 public gasReceived;
 
     function assertionResolvedCallback(uint256, bool, bytes32, bytes32) external {
-        calls += 1;
+        gasReceived = gasleft();
+    }
+}
+
+/// @notice Test Consumer that burns gas until the call runs out.
+contract GasBurningConsumer is IEnzureConsumer {
+    function assertionResolvedCallback(uint256, bool, bytes32, bytes32) external pure {
         while (true) {}
     }
 }

@@ -10,6 +10,5 @@ interface IEnzureConsumer {
     /// @param truthful The settled outcome: true if the Claim was upheld.
     /// @param claimHash sha256 of the Claim.
     /// @param asserter sha256 of the Asserter's NEAR account id (UTF-8).
-    function assertionResolvedCallback(uint256 assertionId, bool truthful, bytes32 claimHash, bytes32 asserter)
-        external;
+    function assertionResolvedCallback(uint256 assertionId, bool truthful, bytes32 claimHash, bytes32 asserter) external;
 }
