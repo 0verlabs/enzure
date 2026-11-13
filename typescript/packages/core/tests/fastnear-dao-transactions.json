@@ -1,0 +1,209 @@
+{
+  "source": "POST https://tx.test.fastnear.com/v0/transactions for the DAO-governed testnet oracle in docs (#8): proposal 2 and 3 add_proposal, proposal 3 approval, trimmed to the fields core reads",
+  "transactions": [
+    {
+      "transaction": {
+        "hash": "BQysmRoouCcBBF4hhfRftkbGdycssxykDoZ1DwAk9JZj",
+        "signer_id": "enzure-council-b-1794575224.testnet",
+        "receiver_id": "enzure-1794575224.sputnikv2.testnet",
+        "actions": [
+          {
+            "FunctionCall": {
+              "method_name": "act_proposal",
+              "args": "eyJpZCI6MywiYWN0aW9uIjoiVm90ZUFwcHJvdmUiLCJwcm9wb3NhbCI6eyJGdW5jdGlvbkNhbGwiOnsicmVjZWl2ZXJfaWQiOiJvcmFjbGUtMTc5NDU3NTU0My5lbnp1cmUtY291bmNpbC1hLTE3OTQ1NzUyMjQudGVzdG5ldCIsImFjdGlvbnMiOlt7Im1ldGhvZF9uYW1lIjoicmVzb2x2ZV9hcHBlYWwiLCJhcmdzIjoiZXlKaGMzTmxjblJwYjI1ZmFXUWlPakVzSW5SeWRYUm9ablZzSWpwMGNuVmxmUT09IiwiZGVwb3NpdCI6IjEiLCJnYXMiOiIxNTAwMDAwMDAwMDAwMDAifV19fX0=",
+              "gas": 300000000000000,
+              "deposit": "0"
+            }
+          }
+        ]
+      },
+      "receipts": [
+        {
+          "execution_outcome": {
+            "block_height": 277514823,
+            "outcome": {
+              "executor_id": "enzure-1794575224.sputnikv2.testnet",
+              "logs": [],
+              "status": {
+                "SuccessValue": ""
+              }
+            }
+          }
+        },
+        {
+          "execution_outcome": {
+            "block_height": 277514824,
+            "outcome": {
+              "executor_id": "enzure-council-b-1794575224.testnet",
+              "logs": [],
+              "status": {
+                "SuccessValue": ""
+              }
+            }
+          }
+        },
+        {
+          "execution_outcome": {
+            "block_height": 277514824,
+            "outcome": {
+              "executor_id": "oracle-1794575543.enzure-council-a-1794575224.testnet",
+              "logs": [
+                "EVENT_JSON:{\"standard\":\"enzure\",\"version\":\"1.0.0\",\"event\":\"appeal_resolved\",\"data\":{\"assertion_id\":1,\"outcome\":true}}",
+                "EVENT_JSON:{\"standard\":\"enzure\",\"version\":\"1.0.0\",\"event\":\"assertion_settled\",\"data\":{\"assertion_id\":1,\"outcome\":true,\"payouts\":[{\"account_id\":\"enzure-council-b-1794575224.testnet\",\"amount\":\"1500000000000000000000000\"},{\"account_id\":\"enzure-1794575224.sputnikv2.testnet\",\"amount\":\"500000000000000000000000\"}]}}"
+              ],
+              "status": {
+                "SuccessValue": "dHJ1ZQ=="
+              }
+            }
+          }
+        },
+        {
+          "execution_outcome": {
+            "block_height": 277514825,
+            "outcome": {
+              "executor_id": "enzure-council-b-1794575224.testnet",
+              "logs": [],
+              "status": {
+                "SuccessValue": ""
+              }
+            }
+          }
+        },
+        {
+          "execution_outcome": {
+            "block_height": 277514825,
+            "outcome": {
+              "executor_id": "enzure-1794575224.sputnikv2.testnet",
+              "logs": [],
+              "status": {
+                "SuccessReceiptId": "FUcuNXyD1Uifp8Q72CyVH8g7zLZp4uTQNa6cVeGVaqHg"
+              }
+            }
+          }
+        },
+        {
+          "execution_outcome": {
+            "block_height": 277514826,
+            "outcome": {
+              "executor_id": "enzure-council-b-1794575224.testnet",
+              "logs": [],
+              "status": {
+                "SuccessValue": ""
+              }
+            }
+          }
+        },
+        {
+          "execution_outcome": {
+            "block_height": 277514826,
+            "outcome": {
+              "executor_id": "enzure-council-b-1794575224.testnet",
+              "logs": [],
+              "status": {
+                "SuccessValue": ""
+              }
+            }
+          }
+        },
+        {
+          "execution_outcome": {
+            "block_height": 277514827,
+            "outcome": {
+              "executor_id": "enzure-council-b-1794575224.testnet",
+              "logs": [],
+              "status": {
+                "SuccessValue": ""
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "transaction": {
+        "hash": "E1nD8USCxXchNrKp3fLvrwX5EfgMWzC3kDc3Wp57QScS",
+        "signer_id": "enzure-council-b-1794575224.testnet",
+        "receiver_id": "enzure-1794575224.sputnikv2.testnet",
+        "actions": [
+          {
+            "FunctionCall": {
+              "method_name": "add_proposal",
+              "args": "eyJwcm9wb3NhbCI6eyJkZXNjcmlwdGlvbiI6IkNoYW5nZSB0aGUgb3JhY2xlIGNvbmZpZzoge1wiZGVmYXVsdF9saXZlbmVzc1wiOjEyMCxcImFwcGVhbF93aW5kb3dcIjo2MCxcImFpX3ZlcmRpY3RfZGVhZGxpbmVcIjo2MCxcImRhb19kZWFkbGluZVwiOjYwMH0iLCJraW5kIjp7IkZ1bmN0aW9uQ2FsbCI6eyJyZWNlaXZlcl9pZCI6Im9yYWNsZS0xNzk0NTc1NTQzLmVuenVyZS1jb3VuY2lsLWEtMTc5NDU3NTIyNC50ZXN0bmV0IiwiYWN0aW9ucyI6W3sibWV0aG9kX25hbWUiOiJzZXRfY29uZmlnIiwiYXJncyI6ImV5SmpiMjVtYVdjaU9uc2liV2x1WDJKdmJtUWlPaUl4TURBd01EQXdNREF3TURBd01EQXdNREF3TURBd01EQXdJaXdpWkdWbVlYVnNkRjlzYVhabGJtVnpjeUk2TVRJd0xDSnRZWGhmYUc5dmEzTWlPalFzSW0xaGVGOXVaV0Z5WDJodmIydGZaMkZ6SWpvaU5UQXdNREF3TURBd01EQXdNREFpTENKaGNIQmxZV3hmZDJsdVpHOTNJam8yTUN3aVlXbGZkbVZ5WkdsamRGOWtaV0ZrYkdsdVpTSTZOakFzSW1SaGIxOWtaV0ZrYkdsdVpTSTZOakF3ZlgwPSIsImRlcG9zaXQiOiIxIiwiZ2FzIjoiMTAwMDAwMDAwMDAwMDAwIn1dfX19fQ==",
+              "gas": 300000000000000,
+              "deposit": "100000000000000000000000"
+            }
+          }
+        ]
+      },
+      "receipts": [
+        {
+          "execution_outcome": {
+            "block_height": 277514570,
+            "outcome": {
+              "executor_id": "enzure-1794575224.sputnikv2.testnet",
+              "logs": [],
+              "status": {
+                "SuccessValue": "Mg=="
+              }
+            }
+          }
+        },
+        {
+          "execution_outcome": {
+            "block_height": 277514571,
+            "outcome": {
+              "executor_id": "enzure-council-b-1794575224.testnet",
+              "logs": [],
+              "status": {
+                "SuccessValue": ""
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "transaction": {
+        "hash": "FzBRNoJQnbKj8DZWSvQkpkds6R1jMK7ZE5u5yJndyoNZ",
+        "signer_id": "enzure-council-b-1794575224.testnet",
+        "receiver_id": "enzure-1794575224.sputnikv2.testnet",
+        "actions": [
+          {
+            "FunctionCall": {
+              "method_name": "add_proposal",
+              "args": "eyJwcm9wb3NhbCI6eyJkZXNjcmlwdGlvbiI6IlJ1bGUgQXNzZXJ0aW9uIDEgdW5kZXIgQXBwZWFsOiBUUlVFLiIsImtpbmQiOnsiRnVuY3Rpb25DYWxsIjp7InJlY2VpdmVyX2lkIjoib3JhY2xlLTE3OTQ1NzU1NDMuZW56dXJlLWNvdW5jaWwtYS0xNzk0NTc1MjI0LnRlc3RuZXQiLCJhY3Rpb25zIjpbeyJtZXRob2RfbmFtZSI6InJlc29sdmVfYXBwZWFsIiwiYXJncyI6ImV5SmhjM05sY25ScGIyNWZhV1FpT2pFc0luUnlkWFJvWm5Wc0lqcDBjblZsZlE9PSIsImRlcG9zaXQiOiIxIiwiZ2FzIjoiMTUwMDAwMDAwMDAwMDAwIn1dfX19fQ==",
+              "gas": 300000000000000,
+              "deposit": "100000000000000000000000"
+            }
+          }
+        ]
+      },
+      "receipts": [
+        {
+          "execution_outcome": {
+            "block_height": 277514815,
+            "outcome": {
+              "executor_id": "enzure-1794575224.sputnikv2.testnet",
+              "logs": [],
+              "status": {
+                "SuccessValue": "Mw=="
+              }
+            }
+          }
+        },
+        {
+          "execution_outcome": {
+            "block_height": 277514816,
+            "outcome": {
+              "executor_id": "enzure-council-b-1794575224.testnet",
+              "logs": [],
+              "status": {
+                "SuccessValue": ""
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

@@ -1,6 +1,7 @@
 import { sha256 } from "@noble/hashes/sha2.js";
 import { decodeFunctionResult, encodeFunctionData, type Address, type Hex } from "viem";
 import { bytesToHex } from "./signature.ts";
+import type { NearHookStatus } from "./oracle-reads.ts";
 import { recoverEvmSigner, resultMessageDigest, type ResultMessage } from "./result-message.ts";
 
 /** A signed result as the oracle's `get_signed_result` view returns it. Byte fields are `0x` lowercase hex. */
@@ -38,7 +39,7 @@ export interface AssertionView {
 
 /** A Hook in an Assertion view: `{ near: {...} }` or `{ evm: {...} }`. */
 export type HookView =
-  | { near: { consumer: string; gas: string; status: string } }
+  | { near: { consumer: string; gas: string; status: NearHookStatus } }
   | { evm: EvmHookView };
 
 export interface EvmHookView {

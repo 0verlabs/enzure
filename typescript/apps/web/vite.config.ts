@@ -18,6 +18,9 @@ export default defineConfig(({ mode }) => {
     rpcUrl: env.NEAR_RPC_URL ?? "",
     txApiUrl: env.NEAR_TX_API_URL ?? "",
     explorerUrl: env.NEAR_EXPLORER_URL ?? "",
+    evmRpcUrl: env.EVM_RPC_URL ?? "",
+    evmLogsApiUrl: env.EVM_LOGS_API_URL ?? "",
+    evmExplorerUrl: env.EVM_EXPLORER_URL ?? "",
   };
   return {
     define: { __ENZURE_WEB_CONFIG__: JSON.stringify(config) },

@@ -1,14 +1,16 @@
 # @enzure/web
 
-The Enzure web app: TanStack Start with Tailwind and shadcn/ui, on a Cloudflare Worker. Anyone with a NEAR testnet wallet can post an Assertion, dispute one during Liveness, follow its timeline and withdraw their balance.
+The Enzure web app: TanStack Start with Tailwind and shadcn/ui, on a Cloudflare Worker. Anyone with a NEAR testnet wallet can post an Assertion, dispute one during Liveness, Appeal a lost AI Verdict, follow its timeline through Appeal and Hook delivery, retry or sign Hooks, and withdraw their balance.
 
 ## Pages
 
-| Path              | What it does                                                                                                                                                                                                                                  |
-| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `/`               | Recent Assertions from the contract's `list_assertions` view, 20 per page (`?before=<id>` for older ones). With a wallet connected, the account's withdrawable balance and a Withdraw button (`withdraw`, 1 yoctoNEAR).                       |
-| `/assert`         | Post an Assertion: type or load a Claim and optional Evidence, choose bond and Liveness. The app uploads both to the storage service, puts their sha256 hashes in `assert_claim` and attaches bond + `assertion_storage_deposit`.             |
-| `/assertions/:id` | State, Liveness countdown, dispute form (bond + `dispute_storage_deposit`) while Liveness runs, the timeline with a NEAR transaction link per step, and the Claim and both Evidence items from storage, marked as matching their hash or not. |
+| Path                       | What it does                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| -------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/`                        | Recent Assertions from the contract's `list_assertions` view, 20 per page (`?before=<id>` for older ones). With a wallet connected, the account's withdrawable balance and a Withdraw button (`withdraw`, 1 yoctoNEAR).                                                                                                                                                                                                                                               |
+| `/assert`                  | Post an Assertion: type or load a Claim and optional Evidence, choose bond and Liveness. The app uploads both to the storage service, puts their sha256 hashes in `assert_claim` and attaches bond + `assertion_storage_deposit`.                                                                                                                                                                                                                                     |
+| `/assertions/:id`          | State, Liveness countdown, dispute form (bond + `dispute_storage_deposit`) while Liveness runs, the timeline with a NEAR transaction link per step, and the Claim and both Evidence items from storage, marked as matching their hash or not.                                                                                                                                                                                                                         |
+| `/assertions/:id` (Appeal) | To the party that lost the AI Verdict (`canAppeal`), during the Appeal Window: an Appeal button (`appeal`, deposit = the Assertion's bond). In Appeal: the reason (appealed, Conflicting Verdicts, UNRESOLVABLE, no verdict) and the DAO deadline. Timeline: the move to Appeal, the DAO's deadline or ruling, with the Sputnik proposal and the transaction that created it.                                                                                         |
+| `/assertions/:id` (Hooks)  | After settlement, one timeline step per Hook. NEAR Hooks: delivered / failed / delivering, with a Retry button for failed ones (`retry_near_hook`, 300 TGas). EVM Hooks: unsigned / signing / signed / delivered, a Start signing button for unsigned ones (`sign_hook`, 1 yoctoNEAR, 300 TGas), the signed result (`get_signed_result`), the NEAR signing transaction, and the Receiver's `isDelivered` / `outcomeOf` on Base Sepolia with the delivery transaction. |
 
 How it reads:
 
@@ -16,20 +18,26 @@ How it reads:
 - Transaction links: the contract doesn't store transaction hashes, so the browser asks the public FastNEAR transactions API (`tx.test.fastnear.com`) for the oracle's transactions since the Assertion was posted and matches the oracle's `enzure` events by `assertion_id` (`fetchAssertionEvents`, `timelineTransactions`). Only logs from receipts the oracle executed count. If that API is down, the timeline still shows, without links.
 - Claim and Evidence are fetched and hash-checked in the browser (`fetchContent`).
 
-The timeline's steps come from core's `assertionTimeline`; `src/components/timeline.tsx` maps each step kind to how it is shown. Appeal steps and Hook deliveries (ticket #14) are added as new step kinds there.
+- The DAO's ruling: the `appeal_resolved` event's transaction is the DAO's `act_proposal`; its `id` is the proposal (`daoProposalId`). The proposal's creation is the DAO's `add_proposal` transaction that returned that id (`fetchProposalTransaction`, FastNEAR again).
+- EVM Hooks: `isDelivered` and `outcomeOf` over Base Sepolia JSON-RPC, and the delivery transaction from the `OutcomeRecorded` log through Blockscout's keyless logs API, because the public RPC limits `eth_getLogs` to 200 blocks (`fetchEvmDelivery`). Only Base Sepolia (chain 84532) is read; Hooks for other chains show their status from NEAR only.
+
+The timeline's steps come from core's `assertionTimeline`; `src/components/timeline.tsx` maps each step kind to how it is shown.
 
 ## Configuration
 
 Fixed at build time from the environment or the repository's root `.env` (only these values reach the bundle):
 
-| Variable            | Required | Default                         |
-| ------------------- | -------- | ------------------------------- |
-| `ORACLE_ACCOUNT_ID` | yes      |                                 |
-| `STORAGE_URL`       | yes      |                                 |
-| `NEAR_NETWORK`      | no       | `testnet`                       |
-| `NEAR_RPC_URL`      | no       | `https://test.rpc.fastnear.com` |
-| `NEAR_TX_API_URL`   | no       | `https://tx.test.fastnear.com`  |
-| `NEAR_EXPLORER_URL` | no       | `https://testnet.nearblocks.io` |
+| Variable            | Required | Default                                   |
+| ------------------- | -------- | ----------------------------------------- |
+| `ORACLE_ACCOUNT_ID` | yes      |                                           |
+| `STORAGE_URL`       | yes      |                                           |
+| `NEAR_NETWORK`      | no       | `testnet`                                 |
+| `NEAR_RPC_URL`      | no       | `https://test.rpc.fastnear.com`           |
+| `NEAR_TX_API_URL`   | no       | `https://tx.test.fastnear.com`            |
+| `NEAR_EXPLORER_URL` | no       | `https://testnet.nearblocks.io`           |
+| `EVM_RPC_URL`       | no       | `https://sepolia.base.org`                |
+| `EVM_LOGS_API_URL`  | no       | `https://base-sepolia.blockscout.com/api` |
+| `EVM_EXPLORER_URL`  | no       | `https://sepolia.basescan.org`            |
 
 A build without the required values still works but shows an alert naming what is missing.
 

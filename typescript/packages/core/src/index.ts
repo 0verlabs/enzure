@@ -39,19 +39,27 @@ export {
 export {
   assertionEvents,
   assertionTimeline,
+  canAppeal,
+  daoProposalId,
   fetchAssertionEvents,
+  fetchProposalTransaction,
+  losingParty,
   nearRpcView,
   timelineTransactions,
   type AiVerdictView,
   type AppealView,
   type AssertionState,
   type DisputeView,
+  type ExplorerAction,
   type ExplorerOptions,
   type ExplorerTransaction,
   type NearRpcOptions,
+  type NearHookStatus,
   type OracleAssertion,
   type OracleEvent,
+  type ProposalTransaction,
   type TimelineStep,
+  type TransactionCall,
 } from "./oracle-reads.ts";
 export {
   fetchContent,
@@ -83,6 +91,7 @@ export {
   type SignedResultView,
 } from "./relayer.ts";
 export { SCHEDULER_GAS, dueCalls, type DueCall, type DueCallOptions } from "./scheduler.ts";
+export { fetchEvmDelivery, type EvmDelivery, type EvmDeliveryOptions } from "./evm-delivery.ts";
 export {
   NEAR_AI_URL,
   SUBMIT_AI_VERDICT_GAS,
