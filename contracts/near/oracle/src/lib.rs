@@ -7,6 +7,7 @@ use near_sdk::{
 };
 
 mod ai;
+mod appeal;
 mod dispute;
 mod events;
 mod evm_hooks;
@@ -15,6 +16,7 @@ mod hooks;
 mod registry;
 
 pub use ai::{PromptTemplate, Verdict};
+pub use appeal::{AppealReason, AppealView};
 pub use dispute::{AiVerdictView, DisputeView};
 pub use events::{Event, Payout};
 pub use evm_hooks::{
@@ -32,6 +34,8 @@ pub const MIN_LIVENESS_SECS: u64 = 60;
 pub const MAX_LIVENESS_SECS: u64 = 7 * 24 * 60 * 60;
 const DEFAULT_LIVENESS_SECS: u64 = 2 * 60 * 60;
 const DEFAULT_APPEAL_WINDOW_SECS: u64 = 24 * 60 * 60;
+const DEFAULT_AI_VERDICT_DEADLINE_SECS: u64 = 60 * 60;
+const DEFAULT_DAO_DEADLINE_SECS: u64 = 7 * 24 * 60 * 60;
 const DEFAULT_MIN_BOND: NearToken = NearToken::from_near(1);
 const DEFAULT_PAGE_SIZE: u32 = 20;
 const MAX_PAGE_SIZE: u32 = 100;
@@ -65,6 +69,12 @@ pub struct Config {
     pub max_near_hook_gas: Gas,
     /// How long, in seconds, the Appeal Window stays open after an AI Verdict.
     pub appeal_window: u64,
+    /// How long, in seconds, a disputed Assertion waits for an AI Verdict
+    /// before `check_timeout` can send it to Appeal.
+    pub ai_verdict_deadline: u64,
+    /// How long, in seconds, the DAO has to rule on an Appeal before `settle`
+    /// settles it without the DAO.
+    pub dao_deadline: u64,
 }
 
 /// The config as the `get_config` view returns it.
@@ -77,6 +87,8 @@ pub struct ConfigView {
     pub max_hooks: u32,
     pub max_near_hook_gas: Gas,
     pub appeal_window: u64,
+    pub ai_verdict_deadline: u64,
+    pub dao_deadline: u64,
 }
 
 #[near(serializers = [borsh])]
@@ -89,6 +101,8 @@ enum AssertionState {
     Ruled {
         outcome: bool,
     },
+    /// Waiting for the DAO's ruling; the dispute's `appeal` says why.
+    InAppeal,
     Settled {
         outcome: bool,
         settled_at_ns: u64,
@@ -124,6 +138,8 @@ pub enum State {
     Disputed,
     /// Has an AI Verdict; it settles with it once the Appeal Window closes.
     Ruled,
+    /// Waiting for the DAO's ruling, or for `settle` after the DAO deadline.
+    InAppeal,
     Settled,
 }
 
@@ -152,8 +168,11 @@ pub struct AssertionView {
     pub dispute: Option<DisputeView>,
     /// Accepted AI Verdicts, oldest first.
     pub ai_verdicts: Vec<AiVerdictView>,
-    /// When the Appeal Window closes; set once an AI Verdict is accepted.
+    /// When the Appeal Window closes; set once a TRUE or FALSE AI Verdict is
+    /// accepted.
     pub appeal_window_ends_at_ns: Option<U64>,
+    /// Set once the Assertion goes to Appeal.
+    pub appeal: Option<AppealView>,
 }
 
 #[near(contract_state)]
@@ -189,6 +208,8 @@ impl Oracle {
                 max_hooks: hooks::DEFAULT_MAX_HOOKS,
                 max_near_hook_gas: hooks::DEFAULT_MAX_NEAR_HOOK_GAS,
                 appeal_window: DEFAULT_APPEAL_WINDOW_SECS,
+                ai_verdict_deadline: DEFAULT_AI_VERDICT_DEADLINE_SECS,
+                dao_deadline: DEFAULT_DAO_DEADLINE_SECS,
             },
             assertions: LookupMap::new(StorageKey::Assertions),
             last_assertion_id: 0,
@@ -281,14 +302,14 @@ impl Oracle {
     /// Undisputed, it settles TRUE once Liveness has ended and the whole bond is
     /// credited to the Asserter. With an AI Verdict, it settles with that verdict
     /// once the Appeal Window has closed: the winner gets their bond back plus
-    /// half the loser's, and the DAO gets the other half. Either way, NEAR Hooks
-    /// are called after the balances are credited.
+    /// half the loser's, and the DAO gets the other half. In Appeal, it settles
+    /// once the DAO deadline has passed without a ruling: by the AI Verdict if
+    /// the loser appealed it, returning the appeal bond in full; otherwise
+    /// FALSE, returning every bond in full. Either way, NEAR Hooks are called
+    /// after the balances are credited.
     pub fn settle(&mut self, assertion_id: u64) -> bool {
         let now = env::block_timestamp();
-        let assertion = self
-            .assertions
-            .get_mut(&assertion_id)
-            .unwrap_or_else(|| env::panic_str(&format!("Assertion {assertion_id} not found")));
+        let assertion = self.assertion(assertion_id);
         let (outcome, payouts) = match assertion.state {
             AssertionState::Asserted => {
                 // `dispute` is allowed only while `now < liveness_ends_at_ns`, so
@@ -313,29 +334,13 @@ impl Oracle {
                 );
                 (
                     outcome,
-                    dispute::ruled_payouts(assertion, outcome, &self.dao),
+                    appeal::ruled_payouts(assertion, outcome, &self.dao),
                 )
             }
+            AssertionState::InAppeal => appeal::overdue_settlement(assertion, now, &self.dao),
             AssertionState::Settled { .. } => env::panic_str("Assertion is already settled"),
         };
-        hooks::require_gas_to_deliver(&assertion.hooks);
-
-        assertion.state = AssertionState::Settled {
-            outcome,
-            settled_at_ns: now,
-        };
-        // The Consumer calls run in later receipts, after this one has committed
-        // the settlement and the credits below.
-        hooks::deliver_all(assertion_id, outcome, &mut assertion.hooks);
-        for payout in &payouts {
-            self.credit(&payout.account_id, payout.amount);
-        }
-        Event::AssertionSettled {
-            assertion_id,
-            outcome,
-            payouts,
-        }
-        .emit();
+        self.complete_settlement(assertion_id, outcome, payouts, now);
         outcome
     }
 
@@ -386,12 +391,16 @@ impl Oracle {
         require!(!config.min_bond.is_zero(), "min_bond must be above zero");
         require_liveness_in_range("default_liveness", config.default_liveness);
         require_liveness_in_range("appeal_window", config.appeal_window);
+        require_liveness_in_range("ai_verdict_deadline", config.ai_verdict_deadline);
+        require_liveness_in_range("dao_deadline", config.dao_deadline);
         Event::ConfigChanged {
             min_bond: config.min_bond,
             default_liveness: config.default_liveness,
             max_hooks: config.max_hooks,
             max_near_hook_gas: config.max_near_hook_gas,
             appeal_window: config.appeal_window,
+            ai_verdict_deadline: config.ai_verdict_deadline,
+            dao_deadline: config.dao_deadline,
         }
         .emit();
         self.config = config;
@@ -450,6 +459,8 @@ impl Oracle {
             max_hooks: self.config.max_hooks,
             max_near_hook_gas: self.config.max_near_hook_gas,
             appeal_window: self.config.appeal_window,
+            ai_verdict_deadline: self.config.ai_verdict_deadline,
+            dao_deadline: self.config.dao_deadline,
         }
     }
 }
@@ -474,6 +485,42 @@ impl Oracle {
         }
     }
 
+    /// Settles the Assertion with `outcome`: credits `payouts`, starts the NEAR
+    /// Hooks and emits `assertion_settled`. Panics, changing nothing, if the
+    /// attached gas can't deliver the NEAR Hooks.
+    fn complete_settlement(
+        &mut self,
+        assertion_id: u64,
+        outcome: bool,
+        payouts: Vec<Payout>,
+        now: u64,
+    ) {
+        let assertion = self.assertion_mut(assertion_id);
+        hooks::require_gas_to_deliver(&assertion.hooks);
+        assertion.state = AssertionState::Settled {
+            outcome,
+            settled_at_ns: now,
+        };
+        // The Consumer calls run in later receipts, after this one has committed
+        // the settlement and the credits below.
+        hooks::deliver_all(assertion_id, outcome, &mut assertion.hooks);
+        for payout in &payouts {
+            self.credit(&payout.account_id, payout.amount);
+        }
+        Event::AssertionSettled {
+            assertion_id,
+            outcome,
+            payouts,
+        }
+        .emit();
+    }
+
+    fn assertion_mut(&mut self, id: u64) -> &mut Assertion {
+        self.assertions
+            .get_mut(&id)
+            .unwrap_or_else(|| env::panic_str(&format!("Assertion {id} not found")))
+    }
+
     fn assertion(&self, id: u64) -> &Assertion {
         self.assertions
             .get(&id)
@@ -487,6 +534,7 @@ impl Assertion {
             AssertionState::Asserted => (State::Asserted, None, None),
             AssertionState::Disputed => (State::Disputed, None, None),
             AssertionState::Ruled { .. } => (State::Ruled, None, None),
+            AssertionState::InAppeal => (State::InAppeal, None, None),
             AssertionState::Settled {
                 outcome,
                 settled_at_ns,
@@ -512,6 +560,7 @@ impl Assertion {
                 .map(dispute::AcceptedVerdict::view)
                 .collect(),
             appeal_window_ends_at_ns: self.appeal_window_ends_at_ns().map(U64),
+            appeal: self.appeal_view(),
         }
     }
 }
