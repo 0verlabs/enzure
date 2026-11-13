@@ -134,4 +134,7 @@ pub enum Event {
         public_key: String,
         model_id: String,
     },
+    /// The DAO deployed new code; `code_hash` is its sha256, in hex.
+    #[event_version("1.0.0")]
+    ContractUpgraded { code_hash: String },
 }
