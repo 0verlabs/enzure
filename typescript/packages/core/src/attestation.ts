@@ -2,7 +2,7 @@ import { bytesToHex, hexToBytes } from "./signature.ts";
 
 /** One entry of `model_attestations[]` in a NEAR AI Cloud attestation report. */
 export interface ModelAttestation {
-  model_name?: string;
+  model_name: string;
   signing_address: string;
   signing_algo: string;
   request_nonce: string;
@@ -46,7 +46,7 @@ export function checkAttestedSigner(
   const nonce = hexToBytes(expected.nonce, 32);
   const candidates = (report.model_attestations ?? []).filter(
     (candidate) =>
-      (candidate.model_name === undefined || candidate.model_name === expected.modelId) &&
+      candidate.model_name === expected.modelId &&
       candidate.signing_algo === "ed25519" &&
       key !== undefined &&
       bytesToHex(hexToBytes(candidate.signing_address, 32) ?? new Uint8Array()) === bytesToHex(key),

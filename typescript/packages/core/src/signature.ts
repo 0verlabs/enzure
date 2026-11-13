@@ -17,7 +17,7 @@ export interface SignedResponse {
   /** The exact bytes received. */
   responseBody: Uint8Array;
   signature: ResponseSignature;
-  /** The ed25519 key the caller trusts for this model, as hex. */
+  /** The ed25519 key expected to sign for this model (a Registered Key, or the key in the model's attestation), as hex. */
   publicKey: string;
 }
 
@@ -30,9 +30,9 @@ export interface SignatureCheck {
   providerTee: boolean;
   /** True when the signed text equals `expectedText`. */
   textMatches: boolean;
-  /** True when the signature names the trusted key as its signer. */
+  /** True when the signature names the expected key as its signer. */
   signerMatches: boolean;
-  /** True when the ed25519 signature over the signed text verifies against the trusted key. */
+  /** True when the ed25519 signature over the signed text verifies against the expected key. */
   signatureValid: boolean;
   /** True when every check above passes. */
   valid: boolean;
@@ -42,7 +42,7 @@ export interface SignatureCheck {
  * Checks a NEAR AI Cloud response signature end to end, as the oracle
  * contract does: both hashes are computed over the exact bytes, the signed
  * text must name the pinned model, and the ed25519 signature must verify
- * against the trusted key. Malformed hex makes the check fail instead of
+ * against the expected key. Malformed hex makes the check fail instead of
  * throwing.
  */
 export async function checkSignedResponse(response: SignedResponse): Promise<SignatureCheck> {

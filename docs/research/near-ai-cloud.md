@@ -173,7 +173,7 @@ Submit to `security`, `privacy`, and `open`. Add `agents` only if the watcher bo
    - `submit_ai_verdict(id, request_body, response_body, text, sig, chat_id)`: sha256 checks, `ed25519_verify` against the registered key, enum parsing.
    - A short counter-verdict window, `escalate()` to an owner/DAO account, and `settle()` that pays out bonds.
 2. `register_signer` controlled by the owner (Option A), plus a script that runs the full off-chain attestation check (dcap-qvl + NRAS) and commits the JSON report.
-3. Relayer/bot (Node + `@nearai/inference-sdk` or plain fetch): watches events, calls the Prompt Template's model (`Qwen/Qwen3.8-27B`, see §7) non-streaming with `x-no-aliasing: true`, fetches the signature, and submits it.
+3. Resolver (Node + `@nearai/inference-sdk` or plain fetch): watches events, calls the Prompt Template's model (`Qwen/Qwen3.8-27B`, see §7) non-streaming with `x-no-aliasing: true`, fetches the signature, and submits it.
 4. Demo UI: assertion list, dispute button, AI verdict with a "Verified on-chain" badge linking to the transaction, and a red-team example where an injected claim gets `UNRESOLVABLE` and is escalated.
 
 **Stub or mention in the README:**
@@ -196,14 +196,14 @@ Checked on 2026-11-13 with `scripts/check-near-ai-signing.mts` (issue #2). The s
 - An ed25519 signature that verifies against `signing_address`.
 - The same key in the model's attestation report (one candidate), whose TDX quote has `report_data = key || our nonce`. The script reads the quote but doesn't verify it; full quote and GPU verification belong to registering a key.
 
-**Structured output and the seed work together with `provider_tee`.** `response_format` with a `json_schema` enum and a `seed` both stayed in the signed request. Seeds up to 2^53 − 1 were accepted; Prompt Template v1 limits the seed to 0 … 2^32 − 1 so it fits a `u32` in Rust and stays exact in JavaScript. The one-word fallback isn't needed.
+**Structured output and the seed work together with `provider_tee`.** `response_format` with a `json_schema` enum and a `seed` both stayed in the signed request, and the script prints this as `structured output + seed`. The script sends a random 32-bit seed; in manual probes before it was written, seeds of 2^32 − 1 and 2^53 − 1 were also accepted and signed. Prompt Template v1 limits the seed to 0 … 2^32 − 1 so it fits a `u32` in Rust and stays exact in JavaScript. The one-word fallback isn't needed, so it isn't built.
 
 **Model: `Qwen/Qwen3.8-27B`.** It is the cheapest Confidential TEE model that passes.
 
 | Model | Price in/out (USD per 1M tokens) | Result with Prompt Template v1 settings |
 |---|---|---|
 | `Qwen/Qwen3.8-27B` | 0.04 / 1.35 | Passes. With thinking off: 0 reasoning tokens, 13 completion tokens, about 445 response bytes. |
-| `z-ai/glm-5.3-flash` | 0.08 / 0.50 | Signs correctly, but reasons even with `enable_thinking: false` (65 reasoning tokens), so it hits `max_tokens: 64` with `finish_reason: length` and no verdict. It would need a larger token limit, and its input price is twice Qwen's. |
+| `z-ai/glm-5.3-flash` | 0.08 / 0.50 | Signs correctly, but reasons even with `enable_thinking: false` (65 reasoning tokens), so it hits `max_tokens: 64` with `finish_reason: length` and no verdict. Raising the limit would let it answer, but it would still cost more: at 8k input tokens about $0.00068 (8k × 0.08 + about 75 output tokens × 0.50, per 1M) against about $0.00034 for Qwen. Counting GLM's reasoning tokens, Qwen is cheaper at every prompt size. |
 | `Qwen/Qwen3-VL-30B-A3B-Instruct`, `Qwen/Qwen3.6-35B-A3B-FP8` | 0.15 / 0.55, 0.17 / 1.10 | Not run: input price is about 4× higher, and the prompt is almost all input. |
 | `deepseek-ai/DeepSeek-V4.1-Flash-1017` | 0.30 / 1.20 | Not run: no `structured_outputs` or `seed` in `/v1/models`. |
 
@@ -223,7 +223,7 @@ The `-abliterated` Qwen variant costs the same but has its safety tuning removed
 | `chat_template_kwargs` | `{"enable_thinking": false}` |
 | Headers | `x-no-aliasing: true`, `Accept-Encoding: identity` |
 
-Keys appear in the order above, with compact JSON and `JSON.stringify` escaping (the same as serde_json). The template text is `PROMPT_TEMPLATE_V1` in core.
+Keys appear in the order above, with compact JSON and `JSON.stringify` escaping (the same as serde_json for strings). Numbers are written as `JSON.stringify` writes them: `temperature` is `0`, while serde_json writes an `f64` zero as `0.0`, so the contract must keep it as an integer or write it literally. The template text is `PROMPT_TEMPLATE_V1` in core.
 
 Details the contract needs:
 - The model writes whitespace inside its JSON answer (`"{\n  \"verdict\": \"TRUE\"\n}"`), so the contract must parse `choices[0].message.content` as JSON, not compare it to a fixed string. It should also require exactly one choice and `finish_reason: "stop"`.

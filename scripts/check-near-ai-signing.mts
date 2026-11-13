@@ -88,9 +88,11 @@ const completion = await fetch(`${API}/chat/completions`, {
   },
 });
 const responseBody = new Uint8Array(await completion.arrayBuffer());
-const responseText = new TextDecoder().decode(responseBody);
+// Strict decoding, so the fixture's text is exactly these bytes.
+const responseText = new TextDecoder("utf-8", { fatal: true }).decode(responseBody);
 if (!completion.ok) fail(`chat completion: HTTP ${completion.status} ${responseText}`);
-const chatId = (JSON.parse(responseText) as { id: string }).id;
+const completionJson = JSON.parse(responseText) as { id: string; usage?: unknown };
+const chatId = completionJson.id;
 
 // 3. Fetch the signature, retrying while it isn't recorded yet.
 const signature = await fetchSignature(chatId);
@@ -114,13 +116,18 @@ try {
 } catch (error) {
   verdict = `does not parse (${(error as Error).message})`;
 }
-const usage = (JSON.parse(responseText) as { usage?: unknown }).usage;
+// Structured output and the seed count as working when the signed request carried both.
+const sent = JSON.parse(new TextDecoder().decode(requestBody)) as {
+  seed?: number;
+  response_format?: { type?: string };
+};
+const structuredAndSeedSigned =
+  check.valid && sent.response_format?.type === "json_schema" && sent.seed === input.seed;
 
 const rows: [string, unknown][] = [
   ["model id", template.modelId],
   ["chat id", chatId],
   ["seed", input.seed],
-  ["structured output", "json_schema verdict enum"],
   ["signature kind", signature.signature_kind ?? "(missing)"],
   ["signing algo", signature.signing_algo],
   ["request hash", check.requestHash],
@@ -131,23 +138,30 @@ const rows: [string, unknown][] = [
   ["attestation candidates", attested.matchingCandidates],
   ["attestation echoes nonce", attested.nonceEchoed],
   ["quote binds key + nonce", attested.reportDataBindsKey],
+  ["structured output + seed", structuredAndSeedSigned ? "signed as provider_tee" : "NOT signed"],
   ["verdict", verdict],
   ["response bytes", responseBody.length],
-  ["usage", JSON.stringify(usage)],
+  ["usage", JSON.stringify(completionJson.usage)],
 ];
 for (const [label, value] of rows) console.log(`${label.padEnd(26)} ${value}`);
 
-const ok = check.valid && attested.valid && !verdict.startsWith("does not parse");
+const ok = structuredAndSeedSigned && attested.valid && !verdict.startsWith("does not parse");
 console.log(
   ok
     ? "\nOK: provider_tee ed25519 signature over the exact bytes, from the attested key, with structured output and a seed."
     : "\nFAILED: see the checks above.",
 );
+if (!structuredAndSeedSigned) {
+  console.log(
+    "Structured output or the seed may break signing. The fallback (a plain one-word answer, parsed strictly) is not built yet; see issue #2.",
+  );
+}
 if (!ok) process.exit(1);
 
 if (args["write-fixture"]) {
   const [candidate] = (attestation.model_attestations ?? []).filter(
-    (entry) => entry.signing_address === signature.signing_address,
+    (entry) =>
+      entry.model_name === template.modelId && entry.signing_address === signature.signing_address,
   );
   const fixture = {
     description:

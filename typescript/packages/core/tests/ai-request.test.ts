@@ -5,7 +5,7 @@ import {
   sha256Hex,
   type PromptTemplate,
 } from "../src/index.ts";
-import { signedResponse } from "./fixture.ts";
+import { inputFromFixture, signedResponse, templateFromFixture } from "./fixture.ts";
 
 const template: PromptTemplate = {
   version: 1,
@@ -81,34 +81,11 @@ test("buildAiRequest rejects text that isn't valid Unicode", () => {
 });
 
 test("buildAiRequest rebuilds the exact request bytes of the real signed response", async () => {
-  const t = signedResponse.prompt_template;
-  const body = buildAiRequest(
-    {
-      version: t.version,
-      modelId: t.model_id,
-      systemPrompt: t.system_prompt,
-      temperature: t.temperature,
-      maxTokens: t.max_tokens,
-      enableThinking: t.enable_thinking,
-    },
-    {
-      claim: signedResponse.input.claim,
-      asserterEvidence: signedResponse.input.asserter_evidence,
-      disputerEvidence: signedResponse.input.disputer_evidence,
-      seed: signedResponse.input.seed,
-    },
-  );
+  const body = buildAiRequest(templateFromFixture(), inputFromFixture());
 
   expect(await sha256Hex(body)).toBe(signedResponse.request_hash);
 });
 
 test("PROMPT_TEMPLATE_V1 is the template the real signed response was made with", () => {
-  expect(PROMPT_TEMPLATE_V1).toEqual({
-    version: signedResponse.prompt_template.version,
-    modelId: signedResponse.prompt_template.model_id,
-    systemPrompt: signedResponse.prompt_template.system_prompt,
-    temperature: signedResponse.prompt_template.temperature,
-    maxTokens: signedResponse.prompt_template.max_tokens,
-    enableThinking: signedResponse.prompt_template.enable_thinking,
-  });
+  expect(PROMPT_TEMPLATE_V1).toEqual(templateFromFixture());
 });

@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import type { AiRequestInput, PromptTemplate } from "../src/index.ts";
 
 /** The real signed NEAR AI Cloud response in the root fixtures folder. */
 export const signedResponse = JSON.parse(
@@ -39,3 +40,27 @@ export const signedResponse = JSON.parse(
 };
 
 export const bytes = (text: string) => new TextEncoder().encode(text);
+
+/** The fixture's Prompt Template, in core's shape. */
+export function templateFromFixture(): PromptTemplate {
+  const template = signedResponse.prompt_template;
+  return {
+    version: template.version,
+    modelId: template.model_id,
+    systemPrompt: template.system_prompt,
+    temperature: template.temperature,
+    maxTokens: template.max_tokens,
+    enableThinking: template.enable_thinking,
+  };
+}
+
+/** The fixture's Claim, Evidence and seed, in core's shape. */
+export function inputFromFixture(): AiRequestInput {
+  const { input } = signedResponse;
+  return {
+    claim: input.claim,
+    asserterEvidence: input.asserter_evidence,
+    disputerEvidence: input.disputer_evidence,
+    seed: input.seed,
+  };
+}

@@ -1,19 +1,19 @@
 import { expect, test } from "vite-plus/test";
 import { checkAttestedSigner, type AttestationReport } from "../src/index.ts";
-import { signedResponse as f } from "./fixture.ts";
+import { signedResponse as fixture } from "./fixture.ts";
 
-const report = (): AttestationReport => ({ model_attestations: [{ ...f.attestation }] });
+const report = (): AttestationReport => ({ model_attestations: [{ ...fixture.attestation }] });
 const expected = () => ({
-  modelId: f.model_id,
-  signingKey: f.public_key,
-  nonce: f.attestation.nonce,
+  modelId: fixture.model_id,
+  signingKey: fixture.public_key,
+  nonce: fixture.attestation.nonce,
 });
 
 test("the real attestation binds the key that signed the real response to our nonce", () => {
   expect(checkAttestedSigner(report(), expected())).toEqual({
     matchingCandidates: 1,
     nonceEchoed: true,
-    reportData: f.public_key + f.attestation.nonce,
+    reportData: fixture.public_key + fixture.attestation.nonce,
     reportDataBindsKey: true,
     valid: true,
   });
@@ -47,7 +47,7 @@ test("a candidate whose quote binds another key fails", () => {
 });
 
 test("two candidates with the same key are ambiguous and fail", () => {
-  const twice = { model_attestations: [{ ...f.attestation }, { ...f.attestation }] };
+  const twice = { model_attestations: [{ ...fixture.attestation }, { ...fixture.attestation }] };
   expect(checkAttestedSigner(twice, expected()).valid).toBe(false);
 });
 

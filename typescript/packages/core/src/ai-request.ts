@@ -51,7 +51,10 @@ export const PROMPT_TEMPLATE_V1: PromptTemplate = {
  *
  * The oracle contract builds the same bytes, so the key order and the JSON
  * escaping are fixed: keys appear in the order written here, and strings are
- * escaped as `JSON.stringify` does (the same as Rust's serde_json). The Claim
+ * escaped as `JSON.stringify` does (the same as Rust's serde_json). Numbers
+ * are written as `JSON.stringify` writes them, so temperature 0 is `0`;
+ * serde_json would write an `f64` zero as `0.0`, so the contract must store
+ * it as an integer or write it out literally. The Claim
  * and both Evidence items are JSON-encoded into the user message, so no text
  * inside them can close the data and start new instructions.
  */
