@@ -27,6 +27,9 @@ examples/evm-consumer/out/
 examples/evm-consumer/cache/
 examples/evm-consumer/broadcast/*/31337/
 examples/evm-consumer/broadcast/**/dry-run/
+examples/escrow/out/
+examples/escrow/cache/
+examples/escrow/broadcast/
 
 # Cloudflare local state and generated types
 .cloudflare/
