@@ -8,80 +8,80 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
-import { Route as rootRouteImport } from "./routes/__root";
-import { Route as IndexRouteImport } from "./routes/index";
-import { Route as AssertRouteImport } from "./routes/assert";
-import { Route as AssertionsIdRouteImport } from "./routes/assertions.$id";
+import { Route as rootRouteImport } from './routes/__root'
+import { Route as IndexRouteImport } from './routes/index'
+import { Route as AssertRouteImport } from './routes/assert'
+import { Route as AssertionsIdRouteImport } from './routes/assertions.$id'
 
 const IndexRoute = IndexRouteImport.update({
-  id: "/",
-  path: "/",
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const AssertRoute = AssertRouteImport.update({
-  id: "/assert",
-  path: "/assert",
+  id: '/assert',
+  path: '/assert',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 const AssertionsIdRoute = AssertionsIdRouteImport.update({
-  id: "/assertions/$id",
-  path: "/assertions/$id",
+  id: '/assertions/$id',
+  path: '/assertions/$id',
   getParentRoute: () => rootRouteImport,
-} as any);
+} as any)
 
 export interface FileRoutesByFullPath {
-  "/": typeof IndexRoute;
-  "/assert": typeof AssertRoute;
-  "/assertions/$id": typeof AssertionsIdRoute;
+  '/': typeof IndexRoute
+  '/assert': typeof AssertRoute
+  '/assertions/$id': typeof AssertionsIdRoute
 }
 export interface FileRoutesByTo {
-  "/": typeof IndexRoute;
-  "/assert": typeof AssertRoute;
-  "/assertions/$id": typeof AssertionsIdRoute;
+  '/': typeof IndexRoute
+  '/assert': typeof AssertRoute
+  '/assertions/$id': typeof AssertionsIdRoute
 }
 export interface FileRoutesById {
-  __root__: typeof rootRouteImport;
-  "/": typeof IndexRoute;
-  "/assert": typeof AssertRoute;
-  "/assertions/$id": typeof AssertionsIdRoute;
+  __root__: typeof rootRouteImport
+  '/': typeof IndexRoute
+  '/assert': typeof AssertRoute
+  '/assertions/$id': typeof AssertionsIdRoute
 }
 export interface FileRouteTypes {
-  fileRoutesByFullPath: FileRoutesByFullPath;
-  fullPaths: "/" | "/assert" | "/assertions/$id";
-  fileRoutesByTo: FileRoutesByTo;
-  to: "/" | "/assert" | "/assertions/$id";
-  id: "__root__" | "/" | "/assert" | "/assertions/$id";
-  fileRoutesById: FileRoutesById;
+  fileRoutesByFullPath: FileRoutesByFullPath
+  fullPaths: '/' | '/assert' | '/assertions/$id'
+  fileRoutesByTo: FileRoutesByTo
+  to: '/' | '/assert' | '/assertions/$id'
+  id: '__root__' | '/' | '/assert' | '/assertions/$id'
+  fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
-  IndexRoute: typeof IndexRoute;
-  AssertRoute: typeof AssertRoute;
-  AssertionsIdRoute: typeof AssertionsIdRoute;
+  IndexRoute: typeof IndexRoute
+  AssertRoute: typeof AssertRoute
+  AssertionsIdRoute: typeof AssertionsIdRoute
 }
 
-declare module "@tanstack/react-router" {
+declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    "/": {
-      id: "/";
-      path: "/";
-      fullPath: "/";
-      preLoaderRoute: typeof IndexRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/assert": {
-      id: "/assert";
-      path: "/assert";
-      fullPath: "/assert";
-      preLoaderRoute: typeof AssertRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
-    "/assertions/$id": {
-      id: "/assertions/$id";
-      path: "/assertions/$id";
-      fullPath: "/assertions/$id";
-      preLoaderRoute: typeof AssertionsIdRouteImport;
-      parentRoute: typeof rootRouteImport;
-    };
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/assert': {
+      id: '/assert'
+      path: '/assert'
+      fullPath: '/assert'
+      preLoaderRoute: typeof AssertRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/assertions/$id': {
+      id: '/assertions/$id'
+      path: '/assertions/$id'
+      fullPath: '/assertions/$id'
+      preLoaderRoute: typeof AssertionsIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -89,16 +89,16 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AssertRoute: AssertRoute,
   AssertionsIdRoute: AssertionsIdRoute,
-};
+}
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
-  ._addFileTypes<FileRouteTypes>();
+  ._addFileTypes<FileRouteTypes>()
 
-import type { getRouter } from "./router.tsx";
-import type { createStart } from "@tanstack/react-start";
-declare module "@tanstack/react-start" {
+import type { getRouter } from './router.tsx'
+import type { createStart } from '@tanstack/react-start'
+declare module '@tanstack/react-start' {
   interface Register {
-    ssr: true;
-    router: Awaited<ReturnType<typeof getRouter>>;
+    ssr: true
+    router: Awaited<ReturnType<typeof getRouter>>
   }
 }

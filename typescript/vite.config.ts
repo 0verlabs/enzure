@@ -11,7 +11,7 @@ export default defineConfig({
     cache: true,
   },
   test: {
-    // Each package runs its tests with its own vite.config.ts.
-    projects: ["apps/*", "packages/*"],
+    // Each package runs its tests with its own vite.config.ts. The web app has no tests.
+    projects: ["apps/*", "packages/*", "!apps/web"],
   },
 });
