@@ -446,6 +446,8 @@ async fn the_dao_sets_the_hook_limits() -> TestResult {
                 "max_hooks": 1,
                 "max_near_hook_gas": NearGas::from_tgas(100),
                 "appeal_window": 86400,
+                "ai_verdict_deadline": 3600,
+                "dao_deadline": 604800,
             } }),
             ONE_YOCTO,
         )
@@ -460,6 +462,8 @@ async fn the_dao_sets_the_hook_limits() -> TestResult {
                 "max_hooks": 1,
                 "max_near_hook_gas": NearGas::from_tgas(100),
                 "appeal_window": 86400,
+                "ai_verdict_deadline": 3600,
+                "dao_deadline": 604800,
             }),
         )]
     );

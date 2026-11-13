@@ -258,6 +258,30 @@ async fn an_unresolvable_ai_verdict_sends_the_assertion_to_appeal_and_the_dao_se
 }
 
 #[tokio::test]
+async fn an_overdue_unresolvable_appeal_settles_false_and_returns_every_bond() -> TestResult {
+    let s = setup(60).await?;
+    let world = &s.world;
+    let content = content();
+    let bond = NearToken::from_near(2);
+    let id = s.ruled(&content, bond, "UNRESOLVABLE").await?;
+    assert_eq!(world.assertion(id).await?["state"], "in_appeal");
+
+    s.wait_for_dao_deadline(id).await?;
+    let settled = world.settle(&s.resolver, id).await?;
+    let events = enzure_events(&settled);
+    assert!(!settled.json::<bool>()?);
+    assert_eq!(
+        events[0].1["payouts"],
+        json!([
+            { "account_id": s.asserter, "amount": bond },
+            { "account_id": s.disputer, "amount": bond },
+        ])
+    );
+    assert_eq!(s.balances().await?, [bond, bond, ZERO]);
+    Ok(())
+}
+
+#[tokio::test]
 async fn conflicting_verdicts_send_the_assertion_to_appeal_and_an_overdue_one_settles_false()
 -> TestResult {
     let s = setup(60).await?;

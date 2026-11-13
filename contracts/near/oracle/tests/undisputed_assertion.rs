@@ -483,6 +483,8 @@ async fn only_the_dao_changes_the_config() -> TestResult {
             "max_hooks": 4,
             "max_near_hook_gas": near_api::NearGas::from_tgas(50),
             "appeal_window": 86400,
+            "ai_verdict_deadline": 3600,
+            "dao_deadline": 604800,
         })
     );
 
@@ -494,6 +496,8 @@ async fn only_the_dao_changes_the_config() -> TestResult {
             "max_hooks": 4,
             "max_near_hook_gas": hook_gas,
             "appeal_window": 120,
+            "ai_verdict_deadline": 300,
+            "dao_deadline": 900,
         }
     });
     let by_stranger = world
@@ -516,12 +520,20 @@ async fn only_the_dao_changes_the_config() -> TestResult {
             "max_hooks": 4,
             "max_near_hook_gas": hook_gas,
             "appeal_window": 120,
+            "ai_verdict_deadline": 3600,
+            "dao_deadline": 604800,
         }
     });
     let rejected = world
         .call(&world.dao, "set_config", bad_liveness, ONE_YOCTO)
         .await?;
     assert!(failure_message(rejected).contains("default_liveness must be between"));
+    for field in ["ai_verdict_deadline", "dao_deadline"] {
+        let mut bad = new_config.clone();
+        bad["config"][field] = serde_json::json!(8 * 24 * 60 * 60);
+        let rejected = world.call(&world.dao, "set_config", bad, ONE_YOCTO).await?;
+        assert!(failure_message(rejected).contains(&format!("{field} must be between")));
+    }
 
     let changed = world
         .call(&world.dao, "set_config", new_config, ONE_YOCTO)
@@ -536,6 +548,8 @@ async fn only_the_dao_changes_the_config() -> TestResult {
                 "max_hooks": 4,
                 "max_near_hook_gas": hook_gas,
                 "appeal_window": 120,
+                "ai_verdict_deadline": 300,
+                "dao_deadline": 900,
             }),
         )]
     );
@@ -546,6 +560,8 @@ async fn only_the_dao_changes_the_config() -> TestResult {
     );
     assert_eq!(config["default_liveness"], 300);
     assert_eq!(config["appeal_window"], 120);
+    assert_eq!(config["ai_verdict_deadline"], 300);
+    assert_eq!(config["dao_deadline"], 900);
 
     // The new settings apply to the next Assertion.
     let small = world.post(&asserter, NearToken::from_near(4), None).await?;
