@@ -43,6 +43,10 @@ step "EVM contracts: Foundry tests"
 step "Example EVM Consumer: Foundry tests"
 (cd examples/evm-consumer && forge test)
 
+step "Escrow demo: Foundry tests and the Claim template tests"
+(cd examples/escrow && forge test)
+node --test examples/escrow/agent/*.test.mts
+
 step "TypeScript: install, check and test"
 (cd typescript && vp install --frozen-lockfile && vp check && vp test)
 
