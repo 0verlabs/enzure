@@ -19,7 +19,8 @@ export default defineConfig(({ mode }) => ({
     name: networkOf(mode) === "mainnet" ? "enzure-web-mainnet" : "enzure-web",
     compatibilityDate: "2026-11-13",
     compatibilityFlags: ["nodejs_compat"],
-    entrypoint: "@tanstack/react-start/server-entry",
+    // Wraps TanStack Start's handler to serve the Mintlify docs at /docs.
+    entrypoint: "./src/server.ts",
     workersDev: true,
     observability: {
       enabled: true,

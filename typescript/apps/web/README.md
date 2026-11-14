@@ -23,6 +23,10 @@ How it reads:
 
 The timeline's steps come from core's `assertionTimeline`; `src/components/timeline.tsx` maps each step kind to how it is shown.
 
+## Docs at `/docs`
+
+The Worker also serves the Mintlify docs (`docs/mintlify`) at `/docs`, as in [Mintlify's Cloudflare guide](https://www.mintlify.com/docs/deploy/cloudflare). `src/server.ts` sends `/docs`, `/docs/*`, `/_mintlify/*` and `/mintlify-assets/*` to `0verlabs.mintlify.site` (`src/docs-proxy.ts`) and everything else to TanStack Start. Mintlify's custom domain is `enzure.0verlabs.com/docs`, so that domain must be a custom domain of this Worker, with no other DNS record for it.
+
 ## Configuration
 
 Fixed at build time from the environment or the repository's root env files (only these values reach the bundle). The build's mode picks the network: `--mode mainnet` reads `.env.mainnet` only and builds the Worker `enzure-web-mainnet`; every other mode is testnet, reads `.env` and `.env.testnet` (which wins), and builds `enzure-web`. `NEAR_NETWORK` comes from the mode, and a build stops if the environment names the other network.
