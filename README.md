@@ -26,7 +26,7 @@ Anyone can call the timed methods; the Keeper, a Cloudflare Durable Object, call
 | --- | --- |
 | Oracle contract (Rust) | Deployed on testnet, governed by the DAO, no full-access keys: `oracle-1794625452.0verlabs.testnet` |
 | Sputnik DAO | Deployed on testnet: `enzure-1794625452.sputnikv2.testnet` |
-| Storage service (Cloudflare Worker + R2) | Deployed: `https://storage.enzure.0verlabs.com` |
+| Storage service (Cloudflare Worker + R2) | Deployed: `https://storage.enzure-testnet.0verlabs.com` |
 | Receiver, escrow and test USDC (Solidity) | Not deployed to Base Sepolia (no funded key). The recorded runs used a local anvil chain with chain id 84532. |
 | Web app and Keeper (Cloudflare) | Not deployed. Both run locally. |
 
