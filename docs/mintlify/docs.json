@@ -18,7 +18,7 @@
 		"light": "/logo/light.svg",
 		"dark": "/logo/dark.svg"
 	},
-	"favicon": "/favicon.ico",
+	"favicon": "/favicon.svg",
 	"appearance": {
 		"default": "dark",
 		"strict": true
@@ -52,7 +52,11 @@
 			},
 			{
 				"group": "Developers",
-				"pages": ["developers/integration", "developers/reference", "developers/deployments"]
+				"pages": [
+					"developers/integration",
+					"developers/reference",
+					"developers/deployments"
+				]
 			},
 			{
 				"group": "Help",
