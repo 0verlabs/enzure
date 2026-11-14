@@ -36,10 +36,10 @@ import { useOracleAction } from "@/lib/oracle-action";
 import { useWallet } from "@/lib/wallet";
 
 /**
- * The developer docs (Mintlify), which this Worker serves at /docs on whatever
- * domain the app runs on (src/server.ts). The Docs item shows as coming soon while this is null.
+ * The developer docs (Mintlify), served at /docs by the Worker on enzure.0verlabs.com
+ * (src/server.ts). The Docs item shows as coming soon while this is null.
  */
-const DOCS_URL: string | null = "/docs";
+const DOCS_URL: string | null = "https://enzure.0verlabs.com/docs";
 
 export function AppSidebar() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
