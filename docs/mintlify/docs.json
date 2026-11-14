@@ -18,7 +18,10 @@
 		"light": "/logo/light.svg",
 		"dark": "/logo/dark.svg"
 	},
-	"favicon": "/favicon.ico",
+	"favicon": {
+    "light": "/favicon.ico",
+    "dark": "/favicon.ico"
+  },
 	"appearance": {
 		"default": "dark",
 		"strict": true
