@@ -1,6 +1,4 @@
-<p align="center"><img src="assets/logo.svg" alt="Enzure" width="96"></p>
-
-# Enzure
+<p align="center"><img src="assets/logo.svg" alt="Enzure" height="120"></p>
 
 Enzure is an optimistic oracle on NEAR for the promises a contract can't check by itself. Anyone posts a bonded statement (an **Assertion**). If nobody disputes it, it settles TRUE. If someone disputes it, a NEAR AI Cloud model running in a TEE rules on it, and the NEAR contract checks the model's signature itself. The losing side can appeal to a Sputnik DAO. When the Assertion settles, the outcome is delivered to contracts on NEAR, or signed through Chain Signatures and delivered to contracts on EVM chains with no bridge.
 
